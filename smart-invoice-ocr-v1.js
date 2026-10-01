@@ -51,38 +51,62 @@ async function enhancedImage(file){
   return canvas;
  }finally{bmp.close()}
 }
-// Most BIG BROTHER paper books print the large invoice number beside "Inv. No."
-// in the upper-right header. Crop this area BEFORE scanning body text, dates,
-// quantities or prices. Return uncertain rather than guessing among numbers.
-async function headerImage(file){
- const bitmap=await createImageBitmap(file);
- try{
-  const x=Math.round(bitmap.width*.53),y=Math.round(bitmap.height*.09);
-  const width=Math.max(1,Math.round(bitmap.width*.45));
-  const height=Math.max(1,Math.round(bitmap.height*.32));
-  const canvas=document.createElement('canvas');
-  const scale=Math.max(2,Math.min(5,1900/width));
-  canvas.width=Math.round(width*scale);
-  canvas.height=Math.round(height*scale);
-  const ctx=canvas.getContext('2d',{willReadFrequently:true});
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  ctx.filter='contrast(170%) grayscale(100%)';
-  ctx.drawImage(bitmap,x,y,Math.min(width,bitmap.width-x),Math.min(height,bitmap.height-y),0,0,canvas.width,canvas.height);
-  return canvas;
- }finally{bitmap.close()}
+// Focus on the actual printed serial at the upper-right. Camera angle,
+// different book layouts and faded red ink need different crop/contrast passes.
+function cropHeader(bitmap,box,style){
+ const x=Math.round(bitmap.width*box[0]),y=Math.round(bitmap.height*box[1]);
+ const w=Math.max(1,Math.min(bitmap.width-x,Math.round(bitmap.width*box[2])));
+ const h=Math.max(1,Math.min(bitmap.height-y,Math.round(bitmap.height*box[3])));
+ const scale=Math.max(2,Math.min(5,1450/w)),canvas=document.createElement('canvas');
+ canvas.width=Math.round(w*scale);canvas.height=Math.round(h*scale);
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});
+ ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+ if(style==='high')ctx.filter='grayscale(100%) contrast(210%) brightness(115%)';
+ else if(style==='contrast')ctx.filter='grayscale(100%) contrast(155%)';
+ else ctx.filter='contrast(115%) saturate(130%)';
+ ctx.drawImage(bitmap,x,y,w,h,0,0,canvas.width,canvas.height);
+ return canvas;
+}
+function isolatedSerial(text){
+ return String(text||'').split(/\r?\n/).flatMap(line=>{
+  const m=line.trim().replace(/[Oo]/g,'0').replace(/[Il|]/g,'1')
+   .match(/^(?:inv(?:oice)?\s*(?:no\.?|#)?\s*[:#.-]?\s*)?([0-9]{4,8})\s*$/i);
+  return m?[m[1]]:[];
+ });
 }
 async function scanHeader(file,expected){
- const roi=await headerImage(file);
- const result=await window.Tesseract.recognize(roi,'eng',{logger:()=>{},tessedit_pageseg_mode:6});
- // An isolated header may contain both a label and date. The label-linked
- // number takes priority; a single bare number is acceptable otherwise.
- const labelled=extract(result?.data?.text||'',false);
- const found=labelled.length?labelled:extract(result?.data?.text||'',true);
- const normalized=[...new Set(found.map(normalize))];
- if(normalized.length===1&&normalized[0]===expected)
-  return {status:'match',scanned:found[0],candidates:found,message:'Top-right printed invoice number matches the system invoice.'};
- if(normalized.length===1&&normalized[0]!==expected)
-  return {status:'mismatch',scanned:found[0],candidates:found,message:'Top-right printed invoice number '+found[0]+' does not match the system invoice.'};
+ const bitmap=await createImageBitmap(file),seen=[];
+ try{
+  // Start tight to exclude handwritten dates. Expand if serial moved.
+  const probes=[
+   {box:[.64,.13,.30,.17],style:'natural',mode:7,tight:true},
+   {box:[.57,.10,.41,.27],style:'contrast',mode:6,tight:false},
+   {box:[.61,.12,.37,.21],style:'high',mode:11,tight:false}
+  ];
+  for(const probe of probes){
+   const result=await window.Tesseract.recognize(
+    cropHeader(bitmap,probe.box,probe.style),'eng',
+    {logger:()=>{},tessedit_pageseg_mode:probe.mode}
+   );
+   const raw=result?.data?.text||'';
+   const labelled=extract(raw,false).filter(v=>/^[0-9]{4,8}$/.test(v));
+   const found=labelled.length?labelled:isolatedSerial(raw);
+   const unique=[...new Set(found.map(normalize))];
+   if(unique.length!==1)continue;
+   const item={value:unique[0],scanned:found[0],strong:labelled.length>0||probe.tight};
+   seen.push(item);
+   // Never approve based on the expected number being somewhere in a busy page.
+   if(item.value===expected&&item.strong&&!seen.some(x=>x.strong&&x.value!==expected))
+    return {status:'match',scanned:item.scanned,candidates:[item.scanned],
+     message:'Upper-right printed invoice number matches the system invoice.'};
+  }
+ }finally{bitmap.close()}
+ const strong=[...new Set(seen.filter(x=>x.strong).map(x=>x.value))];
+ if(strong.length===1&&strong[0]!==expected){
+  const item=seen.find(x=>x.strong);
+  return {status:'mismatch',scanned:item.scanned,candidates:[item.scanned],
+   message:'Header appears to show '+item.scanned+', different from the system invoice. Inspect the print or request administrator review.'};
+ }
  return null;
 }
 function script(){
