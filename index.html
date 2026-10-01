@@ -153,6 +153,7 @@ function wireCrop(){
 }
 
 function setFile(f){
+ $('selectedFileName').textContent=f?'Selected: '+f.name:'No photo selected';
  ocrSerial++;ocr=null;cropRect=null;$('cropPanel').hidden=true;$('cropStart').hidden=!f||!f.type.startsWith('image/');
  if(previewUrl)window.URL.revokeObjectURL(previewUrl);previewUrl='';
  chosen=null;$('save').disabled=true;
