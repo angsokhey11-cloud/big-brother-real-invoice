@@ -8,6 +8,10 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .tag{display:inline-block;background:#fff1dd;color:#9e610b;border-radius:6px;padding:3px 6px;font-size:11px}.success{background:#e5f6ed;color:#17683f}
 .message{min-height:20px;color:#a43836;margin:8px 0}.modal{position:fixed;inset:0;background:#102945ad;display:grid;place-items:center;padding:10px;z-index:5}.modal[hidden]{display:none}.sheet{width:min(520px,100%);max-height:94dvh;overflow:auto;border-radius:15px;background:white;padding:18px}
 .sheet h2{margin:0;font-size:18px}.sheet label{display:block;margin:12px 0 6px;font-weight:bold}.sheet input[type=file]{width:100%;border:1px dashed #acbed3;padding:13px;border-radius:10px}.sheet img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.hint{font-size:12px;color:#69819a}.clipboard-area{margin:12px 0;padding:10px;border:1px solid #c6d9ec;border-radius:10px;background:#f3f8ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.paste-target{background:#fff;border:1px dashed #799cbd;border-radius:9px;padding:12px;min-height:58px;outline:0}.paste-target:focus{border-color:#1769af;box-shadow:0 0 0 3px #1769af20}#pasteFallback{flex-basis:100%}#pasteFallback label{line-height:1.4}.sheet .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}.verify{margin:10px 0;padding:10px;border:1px solid #cadaeb;background:#f5f9ff;border-radius:10px;font-size:13px;line-height:1.45}.verify.good{border-color:#78bd95;background:#e9f8ee;color:#1e7541}.verify.bad{border-color:#dda29e;background:#fff0ed;color:#aa2929}.verify.wait{border-color:#d5b26b;background:#fff9ea;color:#785b19}.replace-fields{margin-top:10px}.replace-fields textarea{width:100%;padding:9px;border:1px solid #b9cddd;border-radius:7px;resize:vertical;min-height:70px}.history{margin:8px 0;padding:8px;border:1px solid #dde8f5;border-radius:10px;font-size:12px;line-height:1.55}.history[hidden]{display:none!important}.crop-tools{margin:9px 0}.crop-panel{background:#eef4fb;border:1px solid #afc7df;padding:9px;border-radius:10px}.crop-panel[hidden]{display:none!important}.crop-panel canvas{display:block;max-width:100%;height:auto;touch-action:none;cursor:crosshair;border:1px solid #a2b9d1;background:white}.crop-panel .buttons{justify-content:flex-start}.crop-panel p{font-size:12px;color:#456381}
+.invoice-viewer{position:fixed;inset:0;z-index:20;background:rgba(11,29,51,.82);display:flex;align-items:center;justify-content:center;padding:12px}
+.invoice-viewer[hidden]{display:none!important}.invoice-viewer-sheet{display:flex;flex-direction:column;width:min(1100px,100%);height:min(94dvh,100%);min-height:0;background:#fff;border-radius:13px;overflow:hidden}
+.invoice-viewer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid #d7e4ef}.invoice-viewer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invoice-viewer-body{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;background:#eaf0f7}
+.invoice-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}.invoice-viewer-body iframe{display:block;width:100%;height:100%;border:0;background:white}.invoice-viewer-body .hint{padding:15px}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
@@ -36,6 +40,9 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div id="cropPanel" class="crop-panel" hidden><p>Drag a box around ONLY the printed or handwritten invoice number. Use the original full photo for the upload.</p><canvas id="cropCanvas" aria-label="Select invoice number area" width="600" height="400"></canvas>
 <div class="buttons"><button type="button" class="alt" id="cropCancel">Cancel</button><button type="button" id="cropVerify" disabled>Scan Selected Area</button></div></div><div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="replace-fields" id="overrideFields" hidden><label for="overrideReason">Administrator override (if OCR cannot confirm or detects a mismatch)</label><textarea id="overrideReason" placeholder="Explain your manual inspection and why this paper invoice matches the customer and invoice number"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Upload Original</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
+<div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
+ <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong><button type="button" class="alt" id="invoiceViewerClose">✕ Close</button></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
+</div>
 <script src="smart-invoice-ocr-v1.js?v=20261001-scanfix2"></script>
 <script>
 (()=>{
@@ -194,7 +201,34 @@ try{
  }catch(e){await request('/storage/v1/object/'+BUCKET+'/'+encodeURIComponent(path).replace('%2F','/'),{method:'DELETE'}).catch(()=>{});throw e}
 busy=false;close();await load();notice(replacing?'Original picture replaced. Previous version retained in audit history.':'Verified original securely uploaded. Removed from Pending Scan.');
 }catch(e){$('uploadMessage').textContent=e.message}finally{busy=false;verificationUI()}}
-async function view(r){try{const t=await token();const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});let data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');const path=data.signedURL;window.open(path.startsWith('http')?path:URL+'/storage/v1'+path,'_blank','noopener,noreferrer')}catch(e){notice(e.message)}}
+let invoiceViewerRequest=0;
+function closeInvoiceViewer(){
+ invoiceViewerRequest++;
+ $('invoiceViewer').hidden=true;
+ $('invoiceViewerBody').replaceChildren();
+}
+async function view(r){
+ const requestId=++invoiceViewerRequest;
+ $('invoiceViewerTitle').textContent=(r.customer||'Customer')+' · '+(r.invoiceNo||'Original invoice');
+ $('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:'Opening private original…'}));
+ $('invoiceViewer').hidden=false;
+ try{
+  const t=await token();
+  const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});
+  const data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');
+  if(requestId!==invoiceViewerRequest)return;
+  const signed=data.signedURL.startsWith('http')?data.signedURL:URL+'/storage/v1'+data.signedURL;
+  const isPDF=/pdf/i.test(r.mime||r.mimeType||r.mime_type||'')||/\.pdf(?:$|[?#])/i.test(r.path||'');
+  const media=document.createElement(isPDF?'iframe':'img');
+  media.src=signed;
+  if(isPDF)media.title='Original invoice PDF';else media.alt='Original invoice: '+(r.invoiceNo||'');
+  media.onerror=()=>{if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:'Preview unavailable. Close and try again.'}))};
+  $('invoiceViewerBody').replaceChildren(media);
+ }catch(e){if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:e.message||'Cannot open original invoice.'}))}
+}
+$('invoiceViewerClose').onclick=closeInvoiceViewer;
+$('invoiceViewer').addEventListener('click',e=>{if(e.target===$('invoiceViewer'))closeInvoiceViewer()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('invoiceViewer').hidden)closeInvoiceViewer()});
 $('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('locationFilter').onchange=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;wireCrop();$('overrideReason').oninput=verificationUI;$('replaceReason').oninput=verificationUI;
 document.addEventListener('paste',e=>{if($('modal').hidden)return;const f=clipboardFiles(e.clipboardData);if(f){e.preventDefault();pastedFile(f)}});void load();
 })();
