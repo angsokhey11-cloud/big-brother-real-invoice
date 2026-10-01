@@ -7,7 +7,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 input[type=search]{width:100%;padding:12px;border:1px solid #cad9e9;border-radius:11px;background:white;margin:10px 0}.tabs{display:flex;gap:7px;flex-wrap:wrap}.card{background:white;padding:14px;border:1px solid #dae6f3;border-radius:13px;margin-bottom:10px}.row>div:first-child{min-width:0;flex:1}.row strong{font-size:16px}.meta{margin:7px 0;color:#657a91;font-size:12px;line-height:1.6}
 .tag{display:inline-block;background:#fff1dd;color:#9e610b;border-radius:6px;padding:3px 6px;font-size:11px}.success{background:#e5f6ed;color:#17683f}
 .message{min-height:20px;color:#a43836;margin:8px 0}.modal{position:fixed;inset:0;background:#102945ad;display:grid;place-items:center;padding:10px;z-index:5}.modal[hidden]{display:none}.sheet{width:min(520px,100%);max-height:94dvh;overflow:auto;border-radius:15px;background:white;padding:18px}
-.sheet h2{margin:0;font-size:18px}.sheet label{display:block;margin:12px 0 6px;font-weight:bold}.sheet input[type=file]{width:100%;border:1px dashed #acbed3;padding:13px;border-radius:10px}.sheet img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.hint{font-size:12px;color:#69819a}.sheet .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
+.sheet h2{margin:0;font-size:18px}.sheet label{display:block;margin:12px 0 6px;font-weight:bold}.sheet input[type=file]{width:100%;border:1px dashed #acbed3;padding:13px;border-radius:10px}.sheet img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.hint{font-size:12px;color:#69819a}.clipboard-area{margin:12px 0;padding:10px;border:1px solid #c6d9ec;border-radius:10px;background:#f3f8ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.paste-target{background:#fff;border:1px dashed #799cbd;border-radius:9px;padding:12px;min-height:58px;outline:0}.paste-target:focus{border-color:#1769af;box-shadow:0 0 0 3px #1769af20}#pasteFallback{flex-basis:100%}#pasteFallback label{line-height:1.4}.sheet .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
 @media(max-width:560px){.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
@@ -18,7 +18,15 @@ input[type=search]{width:100%;padding:12px;border:1px solid #cad9e9;border-radiu
 <div class="modal" id="modal" hidden><section class="sheet" role="dialog" aria-modal="true"><div class="row"><h2 id="modalTitle">Upload invoice</h2><button class="alt" id="close">✕</button></div>
 <div id="target" class="meta"></div><label for="file">Choose a photo or PDF</label>
 <input type="file" id="file" accept="image/jpeg,image/png,image/webp,application/pdf"><div style="margin-top:9px"><label for="camera">Or take a photo</label><input type="file" id="camera" accept="image/*" capture="environment"></div>
-<p class="hint">On desktop, paste a copied screenshot with Ctrl+V. Up to 12 MB. Only upload the paper invoice for this exact invoice/customer.</p>
+<div class="clipboard-area">
+<button type="button" id="pasteClipboard" class="alt">📋 Paste from Clipboard</button>
+<span class="hint">Or press Ctrl+V / ⌘V</span>
+<div id="pasteFallback" hidden>
+<label for="pasteTarget">Clipboard needs keyboard permission: tap here and press Ctrl+V / ⌘V</label>
+<div id="pasteTarget" contenteditable="true" tabindex="0" role="textbox" aria-label="Paste clipboard invoice image here" class="paste-target">Tap here, then paste your invoice image</div>
+</div>
+</div>
+<p class="hint">Images from screenshots or copied photos. Up to 12 MB. Check the invoice/customer before uploading.</p>
 <div id="preview" class="hint">No file selected</div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Upload Original</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <script>
@@ -40,7 +48,29 @@ document.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{const r=rows.fi
 }
 async function load(){if(busy)return;notice('');$('items').textContent='Loading invoices…';try{rows=await rpc('bb_real_invoice_list',{p_mode:mode});if(!Array.isArray(rows))rows=[];render()}catch(e){$('items').textContent='';notice(e.message)}}
 function setFile(f){if(previewUrl)window.URL.revokeObjectURL(previewUrl);chosen=null;$('save').disabled=true;if(!f){$('preview').textContent='No file selected';return}if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)){ $('uploadMessage').textContent='Only JPG, PNG, WebP or PDF.';return}if(f.size>12*1024*1024){$('uploadMessage').textContent='Max size is 12 MB.';return}chosen=f;previewUrl=window.URL.createObjectURL(f);$('preview').innerHTML=f.type.startsWith('image/')?'<img alt="Selected invoice preview" src="'+esc(previewUrl)+'">':'PDF: '+esc(f.name);$('save').disabled=false;$('uploadMessage').textContent=''}
-function openUpload(r){selected=r;$('modalTitle').textContent='Upload Original Invoice';$('target').textContent=r.customer+' · '+r.invoiceNo+' · '+r.invoiceDate;$('modal').hidden=false;setFile(null);$('file').value='';$('uploadMessage').textContent=''}
+function clipboardFiles(data){
+ const files=[...(data?.files||[])];
+ if(data?.items)for(const item of data.items){if(item.kind==='file'){const f=item.getAsFile?.();if(f)files.push(f)}}
+ return files.find(f=>['image/png','image/jpeg','image/webp'].includes(f.type))||null;
+}
+function pastedFile(file){if(!file)return false;setFile(new File([file],'clipboard-invoice.'+({'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[file.type]),{type:file.type}));$('pasteFallback').hidden=true;$('pasteTarget').textContent='Tap here, then paste your invoice image';return true}
+async function pasteFromClipboard(){
+ $('uploadMessage').textContent='';
+ try{
+  if(!navigator.clipboard?.read)throw Error('Clipboard read is not supported in this browser.');
+  const items=await navigator.clipboard.read();
+  for(const item of items){
+   const type=['image/png','image/jpeg','image/webp'].find(type=>item.types.includes(type));
+   if(type){const blob=await item.getType(type);pastedFile(blob);return}
+  }
+  $('uploadMessage').textContent='No copied image found. Copy a screenshot or photo first.';
+ }catch(error){
+  $('pasteFallback').hidden=false;
+  $('uploadMessage').textContent='Clipboard button is unavailable or permission was denied. Tap the paste area and press Ctrl+V / ⌘V.';
+  $('pasteTarget').focus();
+ }
+}
+function openUpload(r){selected=r;$('modalTitle').textContent='Upload Original Invoice';$('target').textContent=r.customer+' · '+r.invoiceNo+' · '+r.invoiceDate;$('modal').hidden=false;setFile(null);$('file').value='';$('camera').value='';$('pasteFallback').hidden=true;$('pasteTarget').textContent='Tap here, then paste your invoice image';$('uploadMessage').textContent=''}
 function close(){if(busy)return;$('modal').hidden=true;selected=null;chosen=null;if(previewUrl){window.URL.revokeObjectURL(previewUrl);previewUrl=''}}
 async function upload(){if(!selected||!chosen||busy)return;busy=true;$('save').disabled=true;$('uploadMessage').textContent='Uploading securely…';
 const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'}[chosen.type],path=selected.invoiceId+'/'+crypto.randomUUID()+'.'+ext;
@@ -49,7 +79,7 @@ try{await rpc('bb_real_invoice_register',{p_invoice_id:selected.invoiceId,p_stor
 busy=false;close();await load();notice('Invoice original securely uploaded. Removed from Pending Scan.');
 }catch(e){$('uploadMessage').textContent=e.message}finally{busy=false;$('save').disabled=!chosen}}
 async function view(r){try{const t=await token();const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});let data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');const path=data.signedURL;window.open(path.startsWith('http')?path:URL+'/storage/v1'+path,'_blank','noopener,noreferrer')}catch(e){notice(e.message)}}
-$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;
-document.addEventListener('paste',e=>{if($('modal').hidden)return;const f=[...(e.clipboardData?.files||[])].find(f=>f.type.startsWith('image/'));if(f){e.preventDefault();setFile(f)}});void load();
+$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;
+document.addEventListener('paste',e=>{if($('modal').hidden)return;const f=clipboardFiles(e.clipboardData);if(f){e.preventDefault();pastedFile(f)}});void load();
 })();
 </script></body></html>
