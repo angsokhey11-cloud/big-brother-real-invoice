@@ -51,6 +51,40 @@ async function enhancedImage(file){
   return canvas;
  }finally{bmp.close()}
 }
+// Most BIG BROTHER paper books print the large invoice number beside "Inv. No."
+// in the upper-right header. Crop this area BEFORE scanning body text, dates,
+// quantities or prices. Return uncertain rather than guessing among numbers.
+async function headerImage(file){
+ const bitmap=await createImageBitmap(file);
+ try{
+  const x=Math.round(bitmap.width*.53),y=Math.round(bitmap.height*.09);
+  const width=Math.max(1,Math.round(bitmap.width*.45));
+  const height=Math.max(1,Math.round(bitmap.height*.32));
+  const canvas=document.createElement('canvas');
+  const scale=Math.max(2,Math.min(5,1900/width));
+  canvas.width=Math.round(width*scale);
+  canvas.height=Math.round(height*scale);
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.filter='contrast(170%) grayscale(100%)';
+  ctx.drawImage(bitmap,x,y,Math.min(width,bitmap.width-x),Math.min(height,bitmap.height-y),0,0,canvas.width,canvas.height);
+  return canvas;
+ }finally{bitmap.close()}
+}
+async function scanHeader(file,expected){
+ const roi=await headerImage(file);
+ const result=await window.Tesseract.recognize(roi,'eng',{logger:()=>{},tessedit_pageseg_mode:6});
+ // An isolated header may contain both a label and date. The label-linked
+ // number takes priority; a single bare number is acceptable otherwise.
+ const labelled=extract(result?.data?.text||'',false);
+ const found=labelled.length?labelled:extract(result?.data?.text||'',true);
+ const normalized=[...new Set(found.map(normalize))];
+ if(normalized.length===1&&normalized[0]===expected)
+  return {status:'match',scanned:found[0],candidates:found,message:'Top-right printed invoice number matches the system invoice.'};
+ if(normalized.length===1&&normalized[0]!==expected)
+  return {status:'mismatch',scanned:found[0],candidates:found,message:'Top-right printed invoice number '+found[0]+' does not match the system invoice.'};
+ return null;
+}
 function script(){
  if(window.Tesseract?.recognize)return Promise.resolve();
  if(loadPromise)return loadPromise;
@@ -70,6 +104,14 @@ async function verify(file,expected,options={}){
  if(!normalizedExpected)return {status:'unclear',message:'System invoice number is missing.',scanned:'',candidates:[]};
  try{
   await script();
+  // The main image is still retained for storage. Only OCR uses this crop.
+  // A labelled number or a single standalone number in the header is primary.
+  if(!options.numberOnly){
+   try{
+    const header=await scanHeader(file,normalizedExpected);
+    if(header)return header;
+   }catch(error){console.warn('Header OCR fallback:',error)}
+  }
   const result=await window.Tesseract.recognize(file,'eng',{logger:()=>{}});
   let candidates=extract(result?.data?.text||'',!!options.numberOnly);
   if(!candidates.length){
