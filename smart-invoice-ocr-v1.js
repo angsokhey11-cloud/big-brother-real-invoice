@@ -12,7 +12,7 @@ function extract(text,numberOnly=false){
  const lines=clean.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
  const candidates=[];
  // Different invoice books print No., INV#, Invoice N°, Invoice No, or Khmer labels.
- const label=/(?:\binv(?:oice)?\b|\binv[.#:/\s-]*(?:no|num|number|#)\b|\binvoice\s*(?:no|number|#|n[o°])\b|(?:\bno\.?\s*[:#-])|លេខ\s*(?:វិក្កយបត្រ|បង្កាន់ដៃ))/i;
+ const label=/(?:\binv(?:oice)?\s*[.#:/\s-]*(?:no\.?|number|num|#|n[o°])\b|\binv\s*[#:]|\binv(?:oice)?\b|\bno\.?\s*[:#-]|លេខ\s*(?:វិក្កយបត្រ|បង្កាន់ដៃ))/i;
  const capture=/^\s*[:#№.\s-]*([0-9OoIl|][0-9OoIl|\s-]{0,13}[0-9OoIl|])\b/;
  for(let i=0;i<lines.length;i++){
   const line=lines[i];
