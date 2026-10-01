@@ -7,7 +7,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .filterbar{display:grid;grid-template-columns:minmax(180px,250px) minmax(0,1fr);gap:10px;margin:12px 0 6px}.filterbar>div{min-width:0}.filterbar label{display:block;font-size:12px;font-weight:bold;color:#58718e;margin:0 0 5px}.filterbar input,.filterbar select{display:block;width:100%;min-width:0;padding:12px;border:1px solid #cad9e9;border-radius:11px;background:white;color:#1a3b63;font:inherit}.filtercount{font-size:12px;color:#70849a;margin:6px 0 12px}.tabs{display:flex;gap:7px;flex-wrap:wrap}.card{background:white;padding:14px;border:1px solid #dae6f3;border-radius:13px;margin-bottom:10px}.row>div:first-child{min-width:0;flex:1}.row strong{font-size:16px}.meta{margin:7px 0;color:#657a91;font-size:12px;line-height:1.6}
 .tag{display:inline-block;background:#fff1dd;color:#9e610b;border-radius:6px;padding:3px 6px;font-size:11px}.success{background:#e5f6ed;color:#17683f}
 .message{min-height:20px;color:#a43836;margin:8px 0}.modal{position:fixed;inset:0;background:#102945ad;display:grid;place-items:center;padding:10px;z-index:5}.modal[hidden]{display:none}.sheet{width:min(520px,100%);max-height:94dvh;overflow:auto;border-radius:15px;background:white;padding:18px}
-.sheet h2{margin:0;font-size:18px}.sheet label{display:block;margin:12px 0 6px;font-weight:bold}.sheet input[type=file]{width:100%;border:1px dashed #acbed3;padding:13px;border-radius:10px}.sheet img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.hint{font-size:12px;color:#69819a}.clipboard-area{margin:12px 0;padding:10px;border:1px solid #c6d9ec;border-radius:10px;background:#f3f8ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.paste-target{background:#fff;border:1px dashed #799cbd;border-radius:9px;padding:12px;min-height:58px;outline:0}.paste-target:focus{border-color:#1769af;box-shadow:0 0 0 3px #1769af20}#pasteFallback{flex-basis:100%}#pasteFallback label{line-height:1.4}.sheet .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}.verify{margin:10px 0;padding:10px;border:1px solid #cadaeb;background:#f5f9ff;border-radius:10px;font-size:13px;line-height:1.45}.verify.good{border-color:#78bd95;background:#e9f8ee;color:#1e7541}.verify.bad{border-color:#dda29e;background:#fff0ed;color:#aa2929}.verify.wait{border-color:#d5b26b;background:#fff9ea;color:#785b19}.replace-fields{margin-top:10px}.replace-fields textarea{width:100%;padding:9px;border:1px solid #b9cddd;border-radius:7px;resize:vertical;min-height:70px}.history{margin:8px 0;padding:8px;border:1px solid #dde8f5;border-radius:10px;font-size:12px;line-height:1.55}.history[hidden]{display:none!important}
+.sheet h2{margin:0;font-size:18px}.sheet label{display:block;margin:12px 0 6px;font-weight:bold}.sheet input[type=file]{width:100%;border:1px dashed #acbed3;padding:13px;border-radius:10px}.sheet img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.hint{font-size:12px;color:#69819a}.clipboard-area{margin:12px 0;padding:10px;border:1px solid #c6d9ec;border-radius:10px;background:#f3f8ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.paste-target{background:#fff;border:1px dashed #799cbd;border-radius:9px;padding:12px;min-height:58px;outline:0}.paste-target:focus{border-color:#1769af;box-shadow:0 0 0 3px #1769af20}#pasteFallback{flex-basis:100%}#pasteFallback label{line-height:1.4}.sheet .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}.verify{margin:10px 0;padding:10px;border:1px solid #cadaeb;background:#f5f9ff;border-radius:10px;font-size:13px;line-height:1.45}.verify.good{border-color:#78bd95;background:#e9f8ee;color:#1e7541}.verify.bad{border-color:#dda29e;background:#fff0ed;color:#aa2929}.verify.wait{border-color:#d5b26b;background:#fff9ea;color:#785b19}.replace-fields{margin-top:10px}.replace-fields textarea{width:100%;padding:9px;border:1px solid #b9cddd;border-radius:7px;resize:vertical;min-height:70px}.history{margin:8px 0;padding:8px;border:1px solid #dde8f5;border-radius:10px;font-size:12px;line-height:1.55}.history[hidden]{display:none!important}.crop-tools{margin:9px 0}.crop-panel{background:#eef4fb;border:1px solid #afc7df;padding:9px;border-radius:10px}.crop-panel[hidden]{display:none!important}.crop-panel canvas{display:block;max-width:100%;height:auto;touch-action:none;cursor:crosshair;border:1px solid #a2b9d1;background:white}.crop-panel .buttons{justify-content:flex-start}.crop-panel p{font-size:12px;color:#456381}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
@@ -31,15 +31,18 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 </div>
 </div>
 <p class="hint">Images from screenshots or copied photos. Up to 12 MB. Number verification assists checking, but identical invoice numbers can belong to different customers—always confirm the customer too.</p>
-<div id="preview" class="hint">No file selected</div><div id="verification" class="verify" hidden></div><div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="replace-fields" id="overrideFields" hidden><label for="overrideReason">Administrator override (if OCR cannot confirm or detects a mismatch)</label><textarea id="overrideReason" placeholder="Explain your manual inspection and why this paper invoice matches the customer and invoice number"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Upload Original</button></div>
+<div id="preview" class="hint">No file selected</div><div id="verification" class="verify" hidden></div>
+<div class="crop-tools"><button type="button" class="alt" id="cropStart" hidden>🔍 Select & Scan Number Area</button></div>
+<div id="cropPanel" class="crop-panel" hidden><p>Drag a box around ONLY the printed or handwritten invoice number. Use the original full photo for the upload.</p><canvas id="cropCanvas" aria-label="Select invoice number area" width="600" height="400"></canvas>
+<div class="buttons"><button type="button" class="alt" id="cropCancel">Cancel</button><button type="button" id="cropVerify" disabled>Scan Selected Area</button></div></div><div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="replace-fields" id="overrideFields" hidden><label for="overrideReason">Administrator override (if OCR cannot confirm or detects a mismatch)</label><textarea id="overrideReason" placeholder="Explain your manual inspection and why this paper invoice matches the customer and invoice number"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Upload Original</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
-<script src="smart-invoice-ocr-v1.js?v=20261001-ocr1"></script>
+<script src="smart-invoice-ocr-v1.js?v=20261001-scanfix2"></script>
 <script>
 (()=>{
 'use strict';
 const URL='https://sjfhlaclgmkwwofzstok.supabase.co', KEY='sb_publishable_w762jR65CWwlO30fKQsYOw_6L9grx8S',SESSION='BB_SUPABASE_DEV_SESSION_V1',BUCKET='bb-real-invoices';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='pending',rows=[],selected=null,chosen=null,busy=false,previewUrl='',ocr=null,ocrSerial=0,replacing=false,adminOverride=false,manageable=new Set();
+let mode='pending',rows=[],selected=null,chosen=null,busy=false,previewUrl='',ocr=null,ocrSerial=0,replacing=false,adminOverride=false,manageable=new Set(),cropBitmap=null,cropRect=null,cropStart=null;
 const clean=v=>String(v??'').trim();
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
 async function token(){let s=readSession();if(!s?.access_token)throw Error('Please sign in through the BIG BROTHER Dashboard.');if(s.expires_at&&s.expires_at<Math.floor(Date.now()/1000)+45){let r=await fetch(URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});const v=await r.json();if(!r.ok)throw Error(v.msg||v.message||'Session expired');v.expires_at=Math.floor(Date.now()/1000)+v.expires_in;localStorage.setItem(SESSION,JSON.stringify(v));s=v}return s.access_token}
@@ -80,8 +83,67 @@ async function scan(){
  if(serial!==ocrSerial||file!==chosen)return;
  ocr=result;verificationUI();
 }
+function drawCrop(){
+ const canvas=$('cropCanvas'),ctx=canvas.getContext('2d');
+ if(!cropBitmap)return;
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.drawImage(cropBitmap,0,0,canvas.width,canvas.height);
+ if(cropRect){
+  const {x,y,w,h}=cropRect;
+  ctx.fillStyle='rgba(17,107,201,.13)';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='#106ac2';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);
+ }
+ $('cropVerify').disabled=!cropRect||cropRect.w<12||cropRect.h<12;
+}
+function point(e){
+ const canvas=$('cropCanvas'),r=canvas.getBoundingClientRect();
+ return {x:Math.min(canvas.width,Math.max(0,(e.clientX-r.left)*canvas.width/r.width)),
+ y:Math.min(canvas.height,Math.max(0,(e.clientY-r.top)*canvas.height/r.height))};
+}
+async function openCrop(){
+ if(!chosen||!chosen.type.startsWith('image/'))return;
+ $('cropPanel').hidden=false;cropRect=null;
+ if(cropBitmap)cropBitmap.close();
+ try{
+  cropBitmap=await createImageBitmap(chosen);
+  if($('cropPanel').hidden)return;
+  const canvas=$('cropCanvas'),scale=Math.min(1,850/cropBitmap.width);
+  canvas.width=Math.round(cropBitmap.width*scale);canvas.height=Math.round(cropBitmap.height*scale);
+  drawCrop();
+ }catch(e){$('uploadMessage').textContent='Could not open image for cropping: '+e.message;$('cropPanel').hidden=true}
+}
+async function verifyCrop(){
+ if(!cropBitmap||!cropRect||!chosen||busy)return;
+ const serial=++ocrSerial,source=chosen,btn=$('cropVerify'),{x,y,w,h}=cropRect;
+ btn.disabled=true;ocr=null;verificationUI();
+ try{
+  const canvas=$('cropCanvas'),ratioX=cropBitmap.width/canvas.width,ratioY=cropBitmap.height/canvas.height;
+  const out=document.createElement('canvas');out.width=Math.max(1,Math.round(w*ratioX*2));out.height=Math.max(1,Math.round(h*ratioY*2));
+  const context=out.getContext('2d');context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';
+  context.drawImage(cropBitmap,x*ratioX,y*ratioY,w*ratioX,h*ratioY,0,0,out.width,out.height);
+  const blob=await new Promise(resolve=>out.toBlob(resolve,'image/png'));
+  if(!blob)throw Error('Could not prepare selected area');
+  const result=await window.BBInvoiceOCR.verify(new File([blob],'invoice-number-area.png',{type:'image/png'}),selected.invoiceNo,{numberOnly:true});
+  if(serial!==ocrSerial||source!==chosen)return;
+  ocr=result;
+  $('cropPanel').hidden=true;
+  verificationUI();
+ }catch(e){$('uploadMessage').textContent='Area scan failed: '+e.message}
+ finally{btn.disabled=false}
+}
+function wireCrop(){
+ const canvas=$('cropCanvas');
+ canvas.addEventListener('pointerdown',e=>{if(!cropBitmap)return;canvas.setPointerCapture(e.pointerId);cropStart=point(e);cropRect=null;drawCrop()});
+ canvas.addEventListener('pointermove',e=>{if(!cropStart)return;const p=point(e);cropRect={x:Math.min(p.x,cropStart.x),y:Math.min(p.y,cropStart.y),w:Math.abs(p.x-cropStart.x),h:Math.abs(p.y-cropStart.y)};drawCrop()});
+ canvas.addEventListener('pointerup',()=>{cropStart=null;drawCrop()});
+ canvas.addEventListener('pointercancel',()=>{cropStart=null;drawCrop()});
+ $('cropStart').onclick=()=>void openCrop();
+ $('cropCancel').onclick=()=>{$('cropPanel').hidden=true};
+ $('cropVerify').onclick=()=>void verifyCrop();
+}
+
 function setFile(f){
- ocrSerial++;ocr=null;
+ ocrSerial++;ocr=null;cropRect=null;$('cropPanel').hidden=true;$('cropStart').hidden=!f||!f.type.startsWith('image/');
  if(previewUrl)window.URL.revokeObjectURL(previewUrl);previewUrl='';
  chosen=null;$('save').disabled=true;
  if(!f){$('preview').textContent='No file selected';verificationUI();return}
@@ -133,7 +195,7 @@ try{
 busy=false;close();await load();notice(replacing?'Original picture replaced. Previous version retained in audit history.':'Verified original securely uploaded. Removed from Pending Scan.');
 }catch(e){$('uploadMessage').textContent=e.message}finally{busy=false;verificationUI()}}
 async function view(r){try{const t=await token();const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});let data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');const path=data.signedURL;window.open(path.startsWith('http')?path:URL+'/storage/v1'+path,'_blank','noopener,noreferrer')}catch(e){notice(e.message)}}
-$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('locationFilter').onchange=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;$('overrideReason').oninput=verificationUI;$('replaceReason').oninput=verificationUI;
+$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('locationFilter').onchange=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;wireCrop();$('overrideReason').oninput=verificationUI;$('replaceReason').oninput=verificationUI;
 document.addEventListener('paste',e=>{if($('modal').hidden)return;const f=clipboardFiles(e.clipboardData);if(f){e.preventDefault();pastedFile(f)}});void load();
 })();
 </script></body></html>
