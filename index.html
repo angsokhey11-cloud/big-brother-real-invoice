@@ -4,15 +4,19 @@
 *{box-sizing:border-box}body{margin:0;background:#f3f7fc;color:#1a3b63;font:14px Arial,sans-serif}.app{max-width:1220px;margin:auto;padding:16px}
 header,.actions,.row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}h1{font-size:22px;margin:0 0 5px}small{color:#70849a}.top{margin-bottom:16px}
 button,input{font:inherit}button{background:#1769af;color:white;border:0;padding:10px 14px;border-radius:9px;font-weight:bold;cursor:pointer}button.alt{background:#e4effb;color:#185b96}button[disabled]{opacity:.45}button.active{background:#103f72}
-input[type=search]{width:100%;padding:12px;border:1px solid #cad9e9;border-radius:11px;background:white;margin:10px 0}.tabs{display:flex;gap:7px;flex-wrap:wrap}.card{background:white;padding:14px;border:1px solid #dae6f3;border-radius:13px;margin-bottom:10px}.row>div:first-child{min-width:0;flex:1}.row strong{font-size:16px}.meta{margin:7px 0;color:#657a91;font-size:12px;line-height:1.6}
+.filterbar{display:grid;grid-template-columns:minmax(180px,250px) minmax(0,1fr);gap:10px;margin:12px 0 6px}.filterbar>div{min-width:0}.filterbar label{display:block;font-size:12px;font-weight:bold;color:#58718e;margin:0 0 5px}.filterbar input,.filterbar select{display:block;width:100%;min-width:0;padding:12px;border:1px solid #cad9e9;border-radius:11px;background:white;color:#1a3b63;font:inherit}.filtercount{font-size:12px;color:#70849a;margin:6px 0 12px}.tabs{display:flex;gap:7px;flex-wrap:wrap}.card{background:white;padding:14px;border:1px solid #dae6f3;border-radius:13px;margin-bottom:10px}.row>div:first-child{min-width:0;flex:1}.row strong{font-size:16px}.meta{margin:7px 0;color:#657a91;font-size:12px;line-height:1.6}
 .tag{display:inline-block;background:#fff1dd;color:#9e610b;border-radius:6px;padding:3px 6px;font-size:11px}.success{background:#e5f6ed;color:#17683f}
 .message{min-height:20px;color:#a43836;margin:8px 0}.modal{position:fixed;inset:0;background:#102945ad;display:grid;place-items:center;padding:10px;z-index:5}.modal[hidden]{display:none}.sheet{width:min(520px,100%);max-height:94dvh;overflow:auto;border-radius:15px;background:white;padding:18px}
 .sheet h2{margin:0;font-size:18px}.sheet label{display:block;margin:12px 0 6px;font-weight:bold}.sheet input[type=file]{width:100%;border:1px dashed #acbed3;padding:13px;border-radius:10px}.sheet img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.hint{font-size:12px;color:#69819a}.clipboard-area{margin:12px 0;padding:10px;border:1px solid #c6d9ec;border-radius:10px;background:#f3f8ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.paste-target{background:#fff;border:1px dashed #799cbd;border-radius:9px;padding:12px;min-height:58px;outline:0}.paste-target:focus{border-color:#1769af;box-shadow:0 0 0 3px #1769af20}#pasteFallback{flex-basis:100%}#pasteFallback label{line-height:1.4}.sheet .buttons{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
-@media(max-width:560px){.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
+@media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
-<input id="search" type="search" placeholder="Search customer, invoice number, location">
+<div class="filterbar">
+ <div><label for="locationFilter">Location</label><select id="locationFilter"><option value="">All permitted locations</option></select></div>
+ <div><label for="search">Customer Name / Invoice Number</label><input id="search" type="search" placeholder="Type customer name or invoice number" autocomplete="off"></div>
+</div>
+<div class="filtercount" id="filterCount" aria-live="polite"></div>
 <p class="message" id="message" role="status"></p><div id="items">Loading…</div>
 </div>
 <div class="modal" id="modal" hidden><section class="sheet" role="dialog" aria-modal="true"><div class="row"><h2 id="modalTitle">Upload invoice</h2><button class="alt" id="close">✕</button></div>
@@ -42,11 +46,20 @@ async function request(path,opts={}){const t=await token();const r=await fetch(U
 async function rpc(name,obj){return request('/rest/v1/rpc/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj||{})})}
 function notice(msg){$('message').textContent=msg||''}
 function chooseMode(v){mode=v;for(const tab of ['pending','uploaded']){$(tab+'Tab').className=mode===tab?'active':'alt'}void load()}
-function render(){const search=clean($('search').value).toLowerCase();const filtered=rows.filter(r=>[r.customer,r.invoiceNo,r.location,r.invoiceId].some(v=>clean(v).toLowerCase().includes(search)));$('items').innerHTML=filtered.length?filtered.map(r=>
+function fillLocations(){
+ const select=$('locationFilter'),previous=select.value;
+ const permitted=[...new Set(rows.map(r=>clean(r.location)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+ select.replaceChildren(new Option('All permitted locations',''),...permitted.map(loc=>new Option(loc,loc)));
+ select.value=permitted.includes(previous)?previous:'';
+}
+function render(){
+ const search=clean($('search').value).toLowerCase(),location=$('locationFilter').value;
+ const filtered=rows.filter(r=>(!location||clean(r.location)===location)&&(!search||[r.customer,r.invoiceNo].some(v=>clean(v).toLowerCase().includes(search))));
+ $('filterCount').textContent=filtered.length+' of '+rows.length+' '+(mode==='pending'?'pending invoices':'uploaded originals')+' shown';$('items').innerHTML=filtered.length?filtered.map(r=>
 '<article class="card row"><div><strong>'+esc(r.customer||'Unknown customer')+'</strong> <span class="tag '+(mode==='uploaded'?'success':'')+'">'+(mode==='pending'?'Needs scan':'Uploaded')+'</span><div class="meta">Invoice: '+esc(r.invoiceNo)+' · '+esc(r.invoiceDate)+'<br>Location: '+esc(r.location)+' · Outstanding: $'+Number(r.outstanding||0).toFixed(2)+(r.uploadedAt?'<br>Uploaded: '+esc(new Date(r.uploadedAt).toLocaleString()):'')+'</div></div><button data-id="'+esc(r.invoiceId)+'">'+(mode==='pending'?'📷 Upload':'👁 View')+'</button></article>').join(''):'<div class="card">No matching '+(mode==='pending'?'invoices needing a scan':'uploaded originals')+'.</div>';
 document.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.invoiceId===b.dataset.id);if(r)mode==='pending'?openUpload(r):void view(r)});
 }
-async function load(){if(busy)return;notice('');$('items').textContent='Loading invoices…';try{rows=await rpc('bb_real_invoice_list',{p_mode:mode});if(!Array.isArray(rows))rows=[];render()}catch(e){$('items').textContent='';notice(e.message)}}
+async function load(){if(busy)return;notice('');$('items').textContent='Loading invoices…';try{rows=await rpc('bb_real_invoice_list',{p_mode:mode});if(!Array.isArray(rows))rows=[];fillLocations();render()}catch(e){$('items').textContent='';notice(e.message)}}
 function setFile(f){if(previewUrl)window.URL.revokeObjectURL(previewUrl);chosen=null;$('save').disabled=true;if(!f){$('preview').textContent='No file selected';return}if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)){ $('uploadMessage').textContent='Only JPG, PNG, WebP or PDF.';return}if(f.size>12*1024*1024){$('uploadMessage').textContent='Max size is 12 MB.';return}chosen=f;previewUrl=window.URL.createObjectURL(f);$('preview').innerHTML=f.type.startsWith('image/')?'<img alt="Selected invoice preview" src="'+esc(previewUrl)+'">':'PDF: '+esc(f.name);$('save').disabled=false;$('uploadMessage').textContent=''}
 function clipboardFiles(data){
  const files=[...(data?.files||[])];
@@ -79,7 +92,7 @@ try{await rpc('bb_real_invoice_register',{p_invoice_id:selected.invoiceId,p_stor
 busy=false;close();await load();notice('Invoice original securely uploaded. Removed from Pending Scan.');
 }catch(e){$('uploadMessage').textContent=e.message}finally{busy=false;$('save').disabled=!chosen}}
 async function view(r){try{const t=await token();const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});let data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');const path=data.signedURL;window.open(path.startsWith('http')?path:URL+'/storage/v1'+path,'_blank','noopener,noreferrer')}catch(e){notice(e.message)}}
-$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;
+$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('locationFilter').onchange=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;
 document.addEventListener('paste',e=>{if($('modal').hidden)return;const f=clipboardFiles(e.clipboardData);if(f){e.preventDefault();pastedFile(f)}});void load();
 })();
 </script></body></html>
