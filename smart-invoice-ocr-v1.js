@@ -79,9 +79,9 @@ async function scanHeader(file,expected){
  try{
   // Start tight to exclude handwritten dates. Expand if serial moved.
   const probes=[
-   {box:[.64,.13,.30,.17],style:'natural',mode:7,tight:true},
-   {box:[.57,.10,.41,.27],style:'contrast',mode:6,tight:false},
-   {box:[.61,.12,.37,.21],style:'high',mode:11,tight:false}
+   {box:[.69,.025,.25,.085],style:'natural',mode:7,tight:true},
+   {box:[.65,.035,.32,.10],style:'contrast',mode:6,tight:false},
+   {box:[.68,.015,.28,.115],style:'high',mode:11,tight:false}
   ];
   for(const probe of probes){
    const result=await window.Tesseract.recognize(
