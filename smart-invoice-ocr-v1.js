@@ -180,10 +180,10 @@ async function scanSelectedDigits(file,expected){
  const raw=String(response?.data?.text||'').trim();
  // Permit harmless OCR spacing and leading zeros, but never infer missing
  // digits or auto-correct characters based on the expected system number.
- const lines=raw.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean);
+ const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  const complete=lines
-  .map(line=>line.replace(/[\\s-]/g,''))
-  .filter(line=>/^\\d{4,8}$/.test(line));
+  .map(line=>line.replace(/[\s-]/g,''))
+  .filter(line=>/^\d{4,8}$/.test(line));
  const unique=[...new Set(complete)];
  if(unique.length===1){
   const scanned=unique[0];
