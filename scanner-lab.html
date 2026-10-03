@@ -144,8 +144,8 @@ async function analyze(file,expected,i,worker){
  if(near)rects.push(near);
  // Diagnostic fallback windows: anchored to upper-right *header area*.
  // Never silently accept a match merely because the expected number exists.
- rects.push({x:base.width*.62,y:base.height*.095,w:base.width*.28,h:base.height*.08,basis:'wide upper header'});
- rects.push({x:base.width*.65,y:base.height*.16,w:base.width*.28,h:base.height*.07,basis:'lower upper header'});
+ rects.push({x:base.width*.48,y:base.height*.13,w:base.width*.47,h:base.height*.13,basis:'wide header, including leftmost digit'});
+ rects.push({x:base.width*.52,y:base.height*.19,w:base.width*.41,h:base.height*.10,basis:'lower shifted header'});
  const readings=[];
  for(const rect of rects){
   const sample=crop(base,rect);
@@ -168,6 +168,56 @@ async function analyze(file,expected,i,worker){
  const raw=document.createElement('details');raw.innerHTML='<summary>View raw header OCR and coordinates</summary>';
  const pre=document.createElement('pre');pre.textContent=JSON.stringify({header:data.text,recognized:readingsDistinct,readings,expected,confident},null,2);
  raw.append(pre);section.append(raw);
+ // Show the complete photo header so operators can diagnose geometry
+ // independently of guessed fallback windows. This tool never attaches files.
+ const manual=document.createElement('div'),help=document.createElement('p');
+ help.textContent='Manual diagnostic: drag a box around all six digits (exclude the dotted underline), then click Scan selected crop.';
+ const preview=document.createElement('canvas');
+ preview.width=top.width;preview.height=top.height;
+ preview.style.touchAction='none';
+ const ctx=preview.getContext('2d');
+ let selected=null,dragStart=null;
+ const draw=()=>{
+  ctx.drawImage(top,0,0);
+  if(selected){
+   ctx.strokeStyle='#e14b24';ctx.lineWidth=Math.max(2,preview.width/400);
+   ctx.strokeRect(selected.x,selected.y,selected.w,selected.h);
+  }
+ };
+ const point=e=>{
+  const r=preview.getBoundingClientRect();
+  return {x:Math.max(0,Math.min(preview.width,(e.clientX-r.left)*preview.width/r.width)),
+   y:Math.max(0,Math.min(preview.height,(e.clientY-r.top)*preview.height/r.height))};
+ };
+ preview.addEventListener('pointerdown',e=>{dragStart=point(e);preview.setPointerCapture(e.pointerId);selected=null;draw()});
+ preview.addEventListener('pointermove',e=>{
+  if(!dragStart)return;
+  const p=point(e);
+  selected={x:Math.min(dragStart.x,p.x),y:Math.min(dragStart.y,p.y),
+   w:Math.abs(dragStart.x-p.x),h:Math.abs(dragStart.y-p.y)};
+  draw();
+ });
+ preview.addEventListener('pointerup',()=>{dragStart=null});
+ preview.addEventListener('pointercancel',()=>{dragStart=null});
+ const manualButton=document.createElement('button');
+ manualButton.textContent='Scan selected crop';
+ const manualStatus=document.createElement('p');
+ manualButton.onclick=async()=>{
+  if(!selected||selected.w<10||selected.h<8){manualStatus.textContent='Drag a box around all six digits first.';return}
+  manualButton.disabled=true;
+  const sample=crop(top,selected);
+  showCanvas(manual,'Your selected crop',sample);
+  let localWorker;
+  try{
+   localWorker=await Tesseract.createWorker('eng');
+   await localWorker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
+   const answer=await localWorker.recognize(sample);
+   const read=String(answer.data?.text||'').trim();
+   manualStatus.textContent='Selected crop raw OCR: '+(read||'[unreadable]')+' | Six digits: '+(digits(read)||'[unreadable]');
+  }catch(e){manualStatus.textContent='OCR error: '+e.message}
+  finally{if(localWorker)await localWorker.terminate();manualButton.disabled=false}
+ };
+ draw();manual.append(help,preview,manualButton,manualStatus);section.append(manual);
  base.width=0;base.height=0;
 }
 $('run').onclick=async()=>{
