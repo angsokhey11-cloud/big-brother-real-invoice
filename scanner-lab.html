@@ -472,6 +472,33 @@ function enhancedNumberCrop(canvas){
  ctx.putImageData(frame,0,0);
  return output;
 }
+// Black-on-white adaptive binarization for low contrast and inconsistent
+// camera white balance. No color channel or expected-number inference.
+function localBinaryNumber(canvas){
+ const out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;
+ const ctx=out.getContext('2d',{willReadFrequently:true}),w=canvas.width,h=canvas.height;
+ ctx.drawImage(canvas,0,0);
+ const image=ctx.getImageData(0,0,w,h),pixels=image.data,lum=new Uint8Array(w*h);
+ for(let i=0;i<lum.length;i++){
+  const p=i*4;lum[i]=Math.round(.299*pixels[p]+.587*pixels[p+1]+.114*pixels[p+2]);
+ }
+ const stride=w+1,integral=new Float64Array((w+1)*(h+1));
+ for(let y=1;y<=h;y++){
+  let running=0;
+  for(let x=1;x<=w;x++){
+   running+=lum[(y-1)*w+x-1];integral[y*stride+x]=integral[(y-1)*stride+x]+running;
+  }
+ }
+ const radius=Math.max(12,Math.round(Math.min(w,h)*.20));
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const x0=Math.max(0,x-radius),y0=Math.max(0,y-radius),x1=Math.min(w,x+radius+1),y1=Math.min(h,y+radius+1);
+  const area=(x1-x0)*(y1-y0);
+  const avg=(integral[y1*stride+x1]-integral[y0*stride+x1]-integral[y1*stride+x0]+integral[y0*stride+x0])/area;
+  const value=lum[y*w+x]<avg-13?0:255,p=(y*w+x)*4;
+  pixels[p]=pixels[p+1]=pixels[p+2]=value;pixels[p+3]=255;
+ }
+ ctx.putImageData(image,0,0);return out;
+}
 async function analyzeLatestFramed(file,expected,worker){
  const section=document.createElement('section');results.append(section);
  const title=document.createElement('h2');title.textContent='Framed invoice: '+file.name;section.append(title);
@@ -522,17 +549,29 @@ async function analyzeLatestFramed(file,expected,worker){
   if(originalVals.length===0){
    const enhanced=enhancedNumberCrop(padded);
    readingsHere.push(...await scanVariant(enhanced,'grayscale contrast'));
-   // Show exactly what the enhanced recognition engine received.
-   showCanvas(section,'Grayscale contrast attempt: '+cand.name,enhanced);
+   const enhancedVals=[...new Set(readingsHere.map(x=>digits(x.raw)).filter(Boolean))];
+   if(enhancedVals.length===0){
+    const binary=localBinaryNumber(padded);
+    readingsHere.push(...await scanVariant(binary,'local grayscale threshold'));
+    // On the next round, a raw single line can be compared without letting
+    // the expected invoice number supply missing or uncertain digits.
+    const stillUnreadable=!readingsHere.some(x=>digits(x.raw));
+    if(stillUnreadable){
+     await worker.setParameters({tessedit_pageseg_mode:'13',tessedit_char_whitelist:'0123456789'});
+     const rawLine=await worker.recognize(binary);
+     readingsHere.push({variant:'local grayscale threshold',mode:'raw-line',
+      raw:String(rawLine.data?.text||'').trim(),confidence:Math.round(rawLine.data?.confidence||0)});
+    }
+   }
   }
   const vals=[...new Set(readingsHere.map(x=>digits(x.raw)).filter(Boolean))];
   const value=vals.length===1?vals[0]:'';
   readings.push({crop:cand.name,modes:readingsHere,value,conflict:vals.length>1});
   if(value){
-   showCanvas(section,'Number crop: '+cand.name,padded);
+   showCanvas(section,'Number crop used: '+cand.name,padded);
    break;
   }
-  if(readings.length===candidates.length)showCanvas(section,'Last number crop tested',padded);
+  if(readings.length===candidates.length)showCanvas(section,'Number crop (unreadable)',padded);
  }
  const found=[...new Set(readings.map(x=>x.value).filter(Boolean))];
  const read=found.length===1?found[0]:'',conflict=readings.some(x=>x.conflict)||found.length>1;
