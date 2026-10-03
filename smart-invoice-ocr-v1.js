@@ -101,12 +101,21 @@ async function scanHeader(file,expected){
      message:'Upper-right printed invoice number matches the system invoice.'};
   }
  }finally{bitmap.close()}
- const strong=[...new Set(seen.filter(x=>x.strong).map(x=>x.value))];
+ const strongSeen=seen.filter(x=>x.strong);
+ const strong=[...new Set(strongSeen.map(x=>x.value))];
+ // Red serial ink can turn a 9 into an 8 in one OCR pass. A single
+ // alternate reading is not proof that the actual paper number differs.
  if(strong.length===1&&strong[0]!==expected){
-  const item=seen.find(x=>x.strong);
-  return {status:'mismatch',scanned:item.scanned,candidates:[item.scanned],
-   message:'Header appears to show '+item.scanned+', different from the system invoice. Inspect the print or request administrator review.'};
+  const corroboration=seen.filter(x=>x.value===strong[0]).length;
+  const item=strongSeen[0];
+  if(corroboration>=2&&seen.every(x=>x.value===strong[0]))
+   return {status:'mismatch',scanned:item.scanned,candidates:[item.scanned],
+    message:'Multiple header scans read '+item.scanned+', different from the system invoice. Inspect the print or request administrator review.'};
+  return {status:'unclear',scanned:item.scanned,candidates:seen.map(x=>x.scanned),
+   message:'Header OCR may have misread a digit ('+item.scanned+'). Select & Scan Number Area around the printed digits before deciding there is a mismatch.'};
  }
+ if(strong.length>1)return {status:'unclear',scanned:'',candidates:seen.map(x=>x.scanned),
+  message:'Header scans disagree about the printed number. Select & Scan Number Area or request administrator review.'};
  return null;
 }
 function script(){
@@ -138,19 +147,29 @@ async function verify(file,expected,options={}){
   }
   const result=await window.Tesseract.recognize(file,'eng',{logger:()=>{}});
   let candidates=extract(result?.data?.text||'',!!options.numberOnly);
-  if(!candidates.length){
-   // Retry with larger/high-contrast text and sparse-text segmentation.
+  // A single OCR pass is insufficient to reject a printed number:
+  // run a separate enhanced pass whenever the initial reading doesn't match.
+  const first=[...new Set(candidates.map(normalize))];
+  if(!candidates.length||(first.length===1&&first[0]!==normalizedExpected)){
    const enhanced=await enhancedImage(file);
    const second=await window.Tesseract.recognize(enhanced,'eng',{
     logger:()=>{},tessedit_pageseg_mode:11
    });
-   candidates=extract(second?.data?.text||'',!!options.numberOnly);
+   const corroborating=extract(second?.data?.text||'',!!options.numberOnly);
+   if(candidates.length&&corroborating.length){
+    const secondDistinct=[...new Set(corroborating.map(normalize))];
+    if(secondDistinct.length!==1||first.length!==1||first[0]!==secondDistinct[0])
+     return {status:'unclear',scanned:'',candidates:[...candidates,...corroborating],
+      message:'OCR scans disagree on one or more digits. Select & Scan Number Area around the printed digits or request administrator review.'};
+   }
+   if(corroborating.length)candidates=corroborating;
   }
   const distinct=[...new Set(candidates.map(normalize))];
   if(distinct.length===1&&distinct[0]===normalizedExpected)
    return {status:'match',scanned:candidates[0],candidates,message:'Scanned invoice number matches '+expected+'.'};
   if(distinct.length===1&&distinct[0]!==normalizedExpected)
-   return {status:'mismatch',scanned:candidates[0],candidates,message:'STOP: Paper invoice '+candidates[0]+' does not match system invoice '+expected+'.'};
+   return {status:'unclear',scanned:candidates[0],candidates,
+    message:'OCR read '+candidates[0]+', which differs from the system number, but cannot establish a mismatch confidently. Select & Scan Number Area or request administrator review.'};
   if(distinct.length>1)
    return {status:'unclear',scanned:'',candidates,message:'More than one possible invoice number detected. Needs administrator review.'};
   return {status:'unclear',scanned:'',candidates:[],message:'Invoice number could not be read confidently. Retake a clear photo or request administrator review.'};
