@@ -118,7 +118,9 @@ async function openCrop(){
   if($('cropPanel').hidden)return;
   const canvas=$('cropCanvas'),scale=Math.min(1,850/cropBitmap.width);
   canvas.width=Math.round(cropBitmap.width*scale);canvas.height=Math.round(cropBitmap.height*scale);
-  cropRect={x:canvas.width*.61,y:canvas.height*.12,w:canvas.width*.36,h:canvas.height*.20};
+  // Start on the upper-right printed red serial, above the handwritten date.
+  // This preset is adjustable by dragging for different paper/photo framing.
+  cropRect={x:canvas.width*.70,y:canvas.height*.025,w:canvas.width*.23,h:canvas.height*.075};
   drawCrop();
  }catch(e){$('uploadMessage').textContent='Could not open image for cropping: '+e.message;$('cropPanel').hidden=true}
 }
