@@ -170,7 +170,7 @@ function selectedDigitReading(result){
  const raw=String(result?.data?.text||'').trim();
  // Selected-area mode must contain one isolated 4–8 digit serial.
  // Reject multiple numbers, dates and OCR guesses with missing characters.
- const items=extract(raw,true).filter(v=>/^\\d{4,8}$/.test(v));
+ const items=extract(raw,true).filter(v=>/^\d{4,8}$/.test(v));
  return items.length===1?items[0]:null;
 }
 async function scanSelectedDigits(file,expected){
