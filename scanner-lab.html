@@ -14,13 +14,61 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace
 </style></head><body><main>
 <h1>🧪 BIG BROTHER · OCR Test Laboratory</h1>
 <aside>Development-only diagnostic page. It never contacts Supabase, saves an invoice, uploads customer photos or changes the live scanner. OCR executes in this browser through Tesseract.js (loaded from a CDN). Photos stay in your browser; only load test images you are permitted to process here.</aside>
-<section class="line"><label>Original invoice photographs <input id="photos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Optional expected numbers (same photo order, commas)<input id="expected" placeholder="001664, 001663, ..."></label><button id="run">Analyze photos</button></section>
+<section class="line"><label>Original invoice photographs <input id="photos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Optional expected numbers (same photo order, commas)<input id="expected" placeholder="001664, 001663, ..."></label><button id="paste" type="button">📋 Paste from Clipboard</button><button id="run">Analyze photos</button><button id="clear" type="button">Clear photos</button></section>
+<section id="pasteZone" tabindex="0" style="border:2px dashed #a7bfdd;text-align:center;cursor:text" aria-label="Clipboard paste area">Click here and press <b>Ctrl+V</b> (or ⌘V on Mac), or use the Paste from Clipboard button.</section>
+<p id="queue" aria-live="polite">0 photos selected.</p>
 <p id="status">Choose one or more existing invoice photographs. No new invoice needed.</p><div id="results"></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 'use strict';
 const $=x=>document.getElementById(x), results=$('results');
+const pastedPhotos=[];
+let pastedSequence=0;
+const allPhotos=()=>[...$('photos').files,...pastedPhotos];
+function queueStatus(){
+ const photos=allPhotos();
+ $('queue').textContent=photos.length+' photo'+(photos.length===1?'':'s')+' ready: '+(photos.map(x=>x.name).join(', ')||'none');
+}
+function queueClipboard(blob){
+ if(!blob||!/^image\/(?:png|jpeg|webp)$/.test(blob.type))return false;
+ const ext=blob.type==='image/jpeg'?'jpg':blob.type.split('/')[1];
+ pastedPhotos.push(new File([blob],'clipboard-'+(++pastedSequence)+'.'+ext,{type:blob.type}));
+ queueStatus();
+ $('status').textContent='Clipboard image added. Paste another photo or click Analyze photos.';
+ return true;
+}
+function pasteItems(items){
+ const images=[...items].filter(i=>i.kind==='file'&&i.type.startsWith('image/'));
+ let count=0;
+ for(const item of images)if(queueClipboard(item.getAsFile()))count++;
+ return count;
+}
+document.addEventListener('paste',e=>{
+ const items=e.clipboardData?.items;
+ if(items?.length&&pasteItems(items))e.preventDefault();
+});
+$('paste').onclick=async()=>{
+ try{
+  if(!navigator.clipboard?.read)throw Error('Clipboard button unavailable in this browser.');
+  const items=await navigator.clipboard.read();
+  let count=0;
+  for(const item of items){
+   const type=['image/png','image/jpeg','image/webp'].find(type=>item.types.includes(type));
+   if(type&&queueClipboard(await item.getType(type)))count++;
+  }
+  if(!count)$('status').textContent='No image found in clipboard. Copy a photo and try again.';
+ }catch(err){
+  $('status').textContent='Clipboard button unavailable or access denied. Click the dashed paste area and press Ctrl+V / ⌘V.';
+  $('pasteZone').focus();
+ }
+};
+$('clear').onclick=()=>{
+ $('photos').value='';pastedPhotos.length=0;pastedSequence=0;results.replaceChildren();
+ queueStatus();$('status').textContent='Photo list cleared. Ready for new test photos.';
+};
+$('photos').addEventListener('change',queueStatus);
+$('pasteZone').onclick=()=>$('pasteZone').focus();
 function digits(text){return String(text||'').replace(/[Ｏ０]/g,'0').replace(/[Ｉｌ]/g,'1').replace(/\s+/g,'').match(/^(?:0[0-9]{5}|[0-9]{6})$/)?.[0]||''}
 function norm(v){const d=String(v||'').replace(/\D/g,'');return d?String(BigInt(d)):''}
 function headerLabel(text){return /\binv(?:oice)?\.?\s*(?:no\.?|number|#)\s*[:.]?/i.test(text)}
@@ -123,7 +171,7 @@ async function analyze(file,expected,i,worker){
  base.width=0;base.height=0;
 }
 $('run').onclick=async()=>{
- const files=[...$('photos').files],expected=$('expected').value.split(',').map(x=>x.trim());
+ const files=allPhotos(),expected=$('expected').value.split(',').map(x=>x.trim());
  if(!files.length){$('status').textContent='Select a photo first.';return}
  if(!window.Tesseract){$('status').textContent='OCR library failed to load. Check your connection.';return}
  $('run').disabled=true;results.replaceChildren();let worker;
