@@ -42,7 +42,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div class="buttons"><button type="button" class="alt" id="editMove" >✋ Move Photo</button><button type="button" class="alt" id="editSelect" >▱ Select Crop Area</button></div>
 <canvas id="editCanvas" width="426" height="600" aria-label="Drag to select a persistent adjustable crop area, or move the picture"></canvas>
 <label for="editZoom">Zoom <strong id="editZoomLabel">100%</strong></label><input type="range" id="editZoom" min="100" max="350" step="5" value="100">
-<label for="editAngle">Rotate <strong id="editAngleLabel">0°</strong></label><input type="range" id="editAngle" min="0" max="360" step="1" value="0">
+<label for="editAngle">Rotate left ↶ / right ↷ <strong id="editAngleLabel">0°</strong></label><input type="range" id="editAngle" min="-180" max="180" step="1" value="0" aria-label="Rotation: negative degrees left, positive degrees right">
 <div class="buttons"><button type="button" class="alt" id="editLeft">↶ 90°</button><button type="button" class="alt" id="editRight">↷ 90°</button><button type="button" class="alt" id="editReset">Reset</button></div>
 <div class="buttons"><button type="button" class="alt" id="editCancel">Cancel</button><button type="button" id="editApply" disabled>Confirm Crop</button></div></div>
 <div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
@@ -312,7 +312,9 @@ for(const name of ['pointerup','pointercancel'])$('editCanvas').addEventListener
 $('editZoom').oninput=e=>{editorTransform.zoom=Number(e.target.value)/100;editorDraw()};
 $('editAngle').oninput=e=>{editorTransform.angle=Number(e.target.value);editorDraw()};
 function editorRotate(amount){
- editorTransform.angle=(editorTransform.angle+amount+360)%360;
+ // Centered 360-degree slider: -180° (left) to +180° (right).
+ // Quarter-turn buttons wrap around without losing the crop selection.
+ editorTransform.angle=((editorTransform.angle+amount+180)%360+360)%360-180;
  $('editAngle').value=String(editorTransform.angle);
  editorDraw();
 }
