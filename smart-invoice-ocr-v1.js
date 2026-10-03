@@ -207,7 +207,7 @@ async function prepareSerialCrop(file){
    }
    const span=last-first+1;
    const density=count/(right-left);
-   if(first>=0&&span>w*.57&&density>.075&&density<.48&&runs>=5){
+   if(first>=0&&span>w*.57&&density>.075&&density<.72&&runs>=5){
     // Choose the highest eligible row to avoid preserving half of a line.
     rule=y;break;
    }
