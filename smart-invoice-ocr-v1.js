@@ -118,6 +118,63 @@ async function scanHeader(file,expected){
   message:'Header scans disagree about the printed number. Select & Scan Number Area or request administrator review.'};
  return null;
 }
+// Printed invoice serials are red while the form, handwriting and date are
+// generally blue. OCR a red-ink mask of the user-selected number crop so
+// blue form lines cannot turn the open loop of a red 9 into an 8.
+async function redSerialMask(file,variant){
+ const bitmap=await createImageBitmap(file);
+ try{
+  const scale=Math.max(1,Math.min(4,1400/bitmap.width));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.round(bitmap.width*scale);
+  canvas.height=Math.round(bitmap.height*scale);
+  const context=canvas.getContext('2d',{willReadFrequently:true});
+  context.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  const pixels=context.getImageData(0,0,canvas.width,canvas.height);
+  let count=0;
+  for(let i=0;i<pixels.data.length;i+=4){
+   const r=pixels.data[i],g=pixels.data[i+1],b=pixels.data[i+2];
+   // Broad and strict color separation are independent image treatments.
+   // Retain red/orange printed ink; discard blue handwriting and paper tint.
+   const red=variant==='strict'
+    ?r>78&&r-g>19&&r-b>19
+    :r>68&&r-g>12&&r-b>12;
+   const val=red?0:255;
+   pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=val;
+   pixels.data[i+3]=255;
+   if(red)count++;
+  }
+  context.putImageData(pixels,0,0);
+  // Do not trust a mostly blank mask or a photo lacking separable red ink.
+  if(count<35||count>pixels.data.length/4*.30)return null;
+  return canvas;
+ }finally{bitmap.close()}
+}
+async function scanSelectedRed(file,expected){
+ const readings=[];
+ for(const variant of ['strict','broad']){
+  const mask=await redSerialMask(file,variant);
+  if(!mask)continue;
+  const result=await window.Tesseract.recognize(mask,'eng',{
+   logger:()=>{},tessedit_pageseg_mode:7,
+   tessedit_char_whitelist:'0123456789'
+  });
+  const candidates=extract(result?.data?.text||'',true);
+  if(candidates.length!==1)continue;
+  readings.push({variant,raw:candidates[0],value:normalize(candidates[0])});
+ }
+ if(readings.length!==2)return null;
+ if(readings[0].value!==readings[1].value)
+  return {status:'unclear',scanned:'',candidates:readings.map(r=>r.raw),
+   message:'Two red-ink scans disagree. Adjust the box to contain only the printed number or request administrator review.'};
+ if(readings[0].value===expected)
+  return {status:'match',scanned:readings[0].raw,candidates:readings.map(r=>r.raw),
+   message:'Both red-ink scans match the printed invoice number.'};
+ // Even agreeing OCR variants can share a recognition error. Never treat
+ // two filters of one image as proof that a real invoice is mismatched.
+ return {status:'unclear',scanned:readings[0].raw,candidates:readings.map(r=>r.raw),
+  message:'Red-ink OCR read '+readings[0].raw+' but this may be an OCR digit error. Review the printed number or request authorized administrator inspection.'};
+}
 function script(){
  if(window.Tesseract?.recognize)return Promise.resolve();
  if(loadPromise)return loadPromise;
@@ -144,6 +201,12 @@ async function verify(file,expected,options={}){
     const header=await scanHeader(file,normalizedExpected);
     if(header)return header;
    }catch(error){console.warn('Header OCR fallback:',error)}
+  }
+  if(options.numberOnly){
+   try{
+    const red=await scanSelectedRed(file,normalizedExpected);
+    if(red)return red;
+   }catch(error){console.warn('Red-ink OCR fallback:',error)}
   }
   const result=await window.Tesseract.recognize(file,'eng',{logger:()=>{}});
   let candidates=extract(result?.data?.text||'',!!options.numberOnly);
