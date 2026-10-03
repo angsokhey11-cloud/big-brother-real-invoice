@@ -173,10 +173,54 @@ function selectedDigitReading(result){
  const items=extract(raw,true).filter(v=>/^\d{4,8}$/.test(v));
  return items.length===1?items[0]:null;
 }
+// Trim a printed dotted underline if it crosses the lower part of a
+// selected serial crop. Work in brightness, not ink color. Only trim when a
+// sufficiently long, near-horizontal row is actually detected; otherwise
+// preserve every pixel. The uploaded photo is never altered.
+async function withoutPrintedUnderline(file){
+ const bitmap=await createImageBitmap(file);
+ try{
+  const w=bitmap.width,h=bitmap.height;
+  if(w<35||h<20)return file;
+  const canvas=document.createElement('canvas');
+  canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(bitmap,0,0);
+  const image=ctx.getImageData(0,0,w,h).data;
+  const scores=[];
+  const from=Math.round(h*.53),to=Math.min(h-2,Math.round(h*.94));
+  for(let y=from;y<to;y++){
+   let dark=0,first=-1,last=-1,runs=0,inRun=false;
+   for(let x=Math.floor(w*.04);x<Math.floor(w*.96);x++){
+    const i=(y*w+x)*4;
+    const lum=.299*image[i]+.587*image[i+1]+.114*image[i+2];
+    // Relative threshold handles both gray/blue dotted rules and camera light.
+    const active=lum<175;
+    if(active){dark++;if(first<0)first=x;last=x;if(!inRun)runs++}
+    inRun=active;
+   }
+   const width=last-first+1;
+   if(first>=0&&dark>w*.27&&width>w*.68&&runs>=4)
+    scores.push({y,dark,width,runs});
+  }
+  if(!scores.length)return file;
+  // Prefer the lower horizontal rule, rather than lower strokes on digits.
+  scores.sort((a,b)=>b.y-a.y);
+  const line=scores[0].y;
+  if(line<h*.57)return file;
+  const keep=Math.max(1,line-Math.max(2,Math.round(h*.018)));
+  const out=document.createElement('canvas');
+  out.width=w;out.height=keep;
+  out.getContext('2d').drawImage(bitmap,0,0,w,keep,0,0,w,keep);
+  const blob=await new Promise(resolve=>out.toBlob(resolve,'image/png'));
+  return blob?new File([blob],'digits-without-rule.png',{type:'image/png'}):file;
+ }finally{bitmap.close()}
+}
 async function scanSelectedDigits(file,expected){
  // The user already isolated the printed number. Read this crop directly:
  // no color detection, voting, worker configuration or multi-mode guessing.
- const response=await window.Tesseract.recognize(file,'eng',{logger:()=>{}});
+ const prepared=await withoutPrintedUnderline(file);
+ const response=await window.Tesseract.recognize(prepared,'eng',{logger:()=>{}});
  const raw=String(response?.data?.text||'').trim();
  // Permit harmless OCR spacing and leading zeros, but never infer missing
  // digits or auto-correct characters based on the expected system number.
