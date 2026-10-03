@@ -174,13 +174,17 @@ async function analyze(file,expected,i,worker){
   await worker.setParameters({tessedit_pageseg_mode:'8',tessedit_char_whitelist:''});
   const word=await worker.recognize(sample);
   const wordRaw=String(word.data?.text||'').trim();
-  const value=digits(lineRaw)||digits(wordRaw);
-  readings.push({name:rect.basis,raw:'line: '+JSON.stringify(lineRaw)+' / word: '+JSON.stringify(wordRaw),value});
+  const lineValue=digits(lineRaw),wordValue=digits(wordRaw);
+  // A disagreement is diagnostic, not evidence to attach a paper invoice.
+  const value=lineValue&&wordValue&&lineValue!==wordValue?'':(lineValue||wordValue);
+  readings.push({name:rect.basis,raw:'line: '+JSON.stringify(lineRaw)+' / word: '+JSON.stringify(wordRaw),value,
+   disagreement:!!(lineValue&&wordValue&&lineValue!==wordValue)});
   showCanvas(section,'Number-only candidate: '+rect.basis+' — '+(value||'[unreadable]'),sample);
   const diagnostic=document.createElement('pre');
   diagnostic.textContent='Raw OCR: digit-only line '+JSON.stringify(lineRaw)+
    ' (confidence '+Math.round(line.data?.confidence||0)+'%) | normal word '+JSON.stringify(wordRaw)+
-   ' (confidence '+Math.round(word.data?.confidence||0)+'%)';
+   ' (confidence '+Math.round(word.data?.confidence||0)+'%)'+
+   (lineValue&&wordValue&&lineValue!==wordValue?' — modes DISAGREE; not auto-verified':'');
   section.append(diagnostic);
  }
  const readingsDistinct=[...new Set([found,...readings.map(x=>x.value)].filter(Boolean))];
