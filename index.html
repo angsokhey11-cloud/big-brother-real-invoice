@@ -13,7 +13,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid #d7e4ef}.invoice-viewer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invoice-viewer-body{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;background:#eaf0f7}
 .invoice-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}.invoice-viewer-body iframe{display:block;width:100%;height:100%;border:0;background:white}.invoice-viewer-body .hint{padding:15px}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
-.photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:100%;height:auto;max-height:55dvh;touch-action:none;background:#eaf0f6;cursor:crosshair}.photo-editor p{font-size:12px;color:#5e7690}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel{justify-content:center;padding:10px;gap:8px}.camera-panel video{display:block;width:100%;height:100%;object-fit:cover}.camera-stage{position:relative;flex:none;width:min(100%,calc((100dvh - 165px)* .71),510px);max-height:calc(100dvh - 165px);aspect-ratio:.71;min-height:0;overflow:hidden;border-radius:12px;background:#101b24}.camera-stage video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.camera-stage #cameraCanvas{display:block;width:100%;height:100%;object-fit:fill}.camera-guide{position:absolute;inset:4%;border:3px solid #ffbb42;border-radius:8px;box-shadow:0 0 0 200vmax #07111a65;pointer-events:none}.camera-panel .buttons{flex-shrink:0;display:flex;justify-content:center}.camera-panel .buttons button{min-height:46px}.camera-panel #cameraStatus{font-size:12px;text-align:center;max-width:94%;margin:0}.camera-panel .focus-ring{position:absolute;width:65px;height:65px;border:2px solid #ffdb62;border-radius:10px;box-shadow:0 0 8px #0b192b;transform:translate(-50%,-50%);pointer-events:none}.camera-panel .focus-ring[hidden]{display:none}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
+.photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:100%;height:auto;max-height:55dvh;touch-action:none;background:#eaf0f6;cursor:crosshair}.photo-editor p{font-size:12px;color:#5e7690}.photo-editor canvas{max-width:430px;margin:auto;touch-action:none;border:0}.photo-editor label{display:flex;justify-content:space-between;font-weight:700;margin:10px 0 3px}.photo-editor input[type=range]{width:100%;accent-color:#1769af}.photo-editor .buttons{justify-content:center;gap:6px}.photo-editor .buttons button{flex:1}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel{justify-content:center;padding:10px;gap:8px}.camera-panel video{display:block;width:100%;height:100%;object-fit:cover}.camera-stage{position:relative;flex:none;width:min(100%,calc((100dvh - 165px)* .71),510px);max-height:calc(100dvh - 165px);aspect-ratio:.71;min-height:0;overflow:hidden;border-radius:12px;background:#101b24}.camera-stage video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.camera-stage #cameraCanvas{display:block;width:100%;height:100%;object-fit:fill}.camera-guide{position:absolute;inset:4%;border:3px solid #ffbb42;border-radius:8px;box-shadow:0 0 0 200vmax #07111a65;pointer-events:none}.camera-panel .buttons{flex-shrink:0;display:flex;justify-content:center}.camera-panel .buttons button{min-height:46px}.camera-panel #cameraStatus{font-size:12px;text-align:center;max-width:94%;margin:0}.camera-panel .focus-ring{position:absolute;width:65px;height:65px;border:2px solid #ffdb62;border-radius:10px;box-shadow:0 0 8px #0b192b;transform:translate(-50%,-50%);pointer-events:none}.camera-panel .focus-ring[hidden]{display:none}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
@@ -38,8 +38,12 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Up to 12 MB. PDF files remain available without photo cropping.</p>
 <div id="preview" class="hint">No photo selected</div>
 <div class="crop-tools"><button type="button" id="editPhoto" class="alt" hidden>✂ Edit / Crop Picture</button><button type="button" id="restorePhoto" class="alt" hidden>Restore selected photo</button></div>
-<div id="photoEditor" class="photo-editor" hidden><p>Draw a rectangle around the invoice paper to remove unnecessary background. Click Apply Crop to use the edited copy.</p><canvas id="editCanvas" aria-label="Drag to crop the invoice paper"></canvas>
-<div class="buttons"><button type="button" class="alt" id="editCancel">Cancel</button><button type="button" id="editApply" disabled>Apply Crop</button></div></div>
+<div id="photoEditor" class="photo-editor" hidden><p>Move your photo beneath the fixed gold invoice frame. Use zoom and rotate to fit the paper; only the area inside the frame will be saved.</p>
+<canvas id="editCanvas" width="426" height="600" aria-label="Fixed invoice crop frame; drag the photo underneath"></canvas>
+<label for="editZoom">Zoom <strong id="editZoomLabel">100%</strong></label><input type="range" id="editZoom" min="100" max="350" step="5" value="100">
+<label for="editAngle">Rotate <strong id="editAngleLabel">0°</strong></label><input type="range" id="editAngle" min="0" max="360" step="1" value="0">
+<div class="buttons"><button type="button" class="alt" id="editLeft">↶ 90°</button><button type="button" class="alt" id="editRight">↷ 90°</button><button type="button" class="alt" id="editReset">Reset</button></div>
+<div class="buttons"><button type="button" class="alt" id="editCancel">Cancel</button><button type="button" id="editApply">Apply Crop</button></div></div>
 <div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
@@ -52,7 +56,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 'use strict';
 const URL='https://sjfhlaclgmkwwofzstok.supabase.co', KEY='sb_publishable_w762jR65CWwlO30fKQsYOw_6L9grx8S',SESSION='BB_SUPABASE_DEV_SESSION_V1',BUCKET='bb-real-invoices';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorRect=null,editorStart=null,cameraStream=null,cameraFrameId=0,cameraFocusBusy=false,cameraLastDraw=0,cameraStarting=false;
+let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorTransform={x:0,y:0,zoom:1,angle:0},editorPointer=null,cameraStream=null,cameraFrameId=0,cameraFocusBusy=false,cameraLastDraw=0,cameraStarting=false;
 
 const clean=v=>String(v??'').trim();
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
@@ -220,54 +224,111 @@ $('cameraCapture').onclick=()=>{
   stopCamera();setFile(new File([blob],'camera-invoice.jpg',{type:'image/jpeg'}));
  },'image/jpeg',.93);
 };
+const EDIT={width:426,height:600,frameX:18,frameY:25,frameW:390,frameH:550};
+function editorBaseScale(){
+ if(!editorBitmap)return 1;
+ const angle=editorTransform.angle*Math.PI/180;
+ const bw=Math.abs(editorBitmap.width*Math.cos(angle))+Math.abs(editorBitmap.height*Math.sin(angle));
+ const bh=Math.abs(editorBitmap.width*Math.sin(angle))+Math.abs(editorBitmap.height*Math.cos(angle));
+ // Cover the FULL crop frame at every angle, avoiding unintended blank corners.
+ return Math.max(EDIT.frameW/bw,EDIT.frameH/bh);
+}
+function paintEdited(ctx,factor=1,withGuide=true){
+ if(!editorBitmap)return;
+ const w=EDIT.width*factor,h=EDIT.height*factor;
+ ctx.clearRect(0,0,w,h);ctx.fillStyle='#e9eff7';ctx.fillRect(0,0,w,h);
+ const t=editorTransform,scale=editorBaseScale()*t.zoom;
+ ctx.save();ctx.translate((EDIT.width/2+t.x)*factor,(EDIT.height/2+t.y)*factor);
+ ctx.rotate(t.angle*Math.PI/180);ctx.scale(scale*factor,scale*factor);
+ ctx.drawImage(editorBitmap,-editorBitmap.width/2,-editorBitmap.height/2);
+ ctx.restore();
+ if(!withGuide)return;
+ ctx.fillStyle='rgba(3,17,32,.47)';
+ ctx.fillRect(0,0,w,EDIT.frameY*factor);
+ ctx.fillRect(0,(EDIT.frameY+EDIT.frameH)*factor,w,(EDIT.height-EDIT.frameY-EDIT.frameH)*factor);
+ ctx.fillRect(0,EDIT.frameY*factor,EDIT.frameX*factor,EDIT.frameH*factor);
+ ctx.fillRect((EDIT.frameX+EDIT.frameW)*factor,EDIT.frameY*factor,
+  (EDIT.width-EDIT.frameX-EDIT.frameW)*factor,EDIT.frameH*factor);
+ ctx.strokeStyle='#ffb72b';ctx.lineWidth=3*factor;
+ ctx.strokeRect(EDIT.frameX*factor,EDIT.frameY*factor,EDIT.frameW*factor,EDIT.frameH*factor);
+}
 function editorDraw(){
  if(!editorBitmap)return;
- const can=$('editCanvas'),ctx=can.getContext('2d');
- ctx.clearRect(0,0,can.width,can.height);ctx.drawImage(editorBitmap,0,0,can.width,can.height);
- if(editorRect){
-  ctx.fillStyle='rgba(10,91,178,.12)';ctx.fillRect(editorRect.x,editorRect.y,editorRect.w,editorRect.h);
-  ctx.strokeStyle='#0476dd';ctx.lineWidth=Math.max(2,can.width/350);
-  ctx.strokeRect(editorRect.x,editorRect.y,editorRect.w,editorRect.h);
- }
- $('editApply').disabled=!editorRect||editorRect.w<24||editorRect.h<24;
+ paintEdited($('editCanvas').getContext('2d'));
+ $('editZoomLabel').textContent=Math.round(editorTransform.zoom*100)+'%';
+ $('editAngleLabel').textContent=Math.round(editorTransform.angle)+'°';
 }
-function editPoint(e){
- const can=$('editCanvas'),r=can.getBoundingClientRect();
- const scale=Math.min(r.width/can.width,r.height/can.height);
- const ox=r.left+(r.width-can.width*scale)/2,oy=r.top+(r.height-can.height*scale)/2;
- return {x:Math.max(0,Math.min(can.width,(e.clientX-ox)/scale)),
-  y:Math.max(0,Math.min(can.height,(e.clientY-oy)/scale))};
+function editorPoint(e){
+ const rect=$('editCanvas').getBoundingClientRect();
+ return {x:(e.clientX-rect.left)*EDIT.width/rect.width,
+  y:(e.clientY-rect.top)*EDIT.height/rect.height};
 }
-$('editCanvas').addEventListener('pointerdown',e=>{if(!editorBitmap)return;const can=$('editCanvas');can.setPointerCapture(e.pointerId);editorStart=editPoint(e);editorRect=null;editorDraw()});
-$('editCanvas').addEventListener('pointermove',e=>{
- if(!editorStart)return;const p=editPoint(e);
- editorRect={x:Math.min(editorStart.x,p.x),y:Math.min(editorStart.y,p.y),
-  w:Math.abs(editorStart.x-p.x),h:Math.abs(editorStart.y-p.y)};editorDraw();
+$('editCanvas').addEventListener('pointerdown',e=>{
+ if(!editorBitmap)return;
+ e.preventDefault();$('editCanvas').setPointerCapture(e.pointerId);
+ editorPointer={id:e.pointerId,p:editorPoint(e),x:editorTransform.x,y:editorTransform.y};
 });
-for(const t of ['pointerup','pointercancel'])$('editCanvas').addEventListener(t,()=>{editorStart=null;editorDraw()});
+$('editCanvas').addEventListener('pointermove',e=>{
+ if(!editorPointer||editorPointer.id!==e.pointerId)return;
+ e.preventDefault();
+ const p=editorPoint(e);editorTransform.x=editorPointer.x+p.x-editorPointer.p.x;
+ editorTransform.y=editorPointer.y+p.y-editorPointer.p.y;editorDraw();
+});
+for(const t of ['pointerup','pointercancel'])$('editCanvas').addEventListener(t,e=>{
+ if(editorPointer?.id===e.pointerId)editorPointer=null;
+});
+$('editZoom').oninput=e=>{editorTransform.zoom=Number(e.target.value)/100;editorDraw()};
+$('editAngle').oninput=e=>{editorTransform.angle=Number(e.target.value);editorDraw()};
+function editorRotate(amount){
+ editorTransform.angle=(editorTransform.angle+amount+360)%360;
+ $('editAngle').value=String(editorTransform.angle);editorDraw();
+}
+$('editLeft').onclick=()=>editorRotate(-90);
+$('editRight').onclick=()=>editorRotate(90);
+function resetEditor(){
+ editorTransform={x:0,y:0,zoom:1,angle:0};
+ $('editZoom').value='100';$('editAngle').value='0';editorDraw();
+}
+$('editReset').onclick=resetEditor;
 $('editPhoto').onclick=async()=>{
  if(!sourcePhoto?.type.startsWith('image/'))return;
  try{
   if(editorBitmap)editorBitmap.close();
   editorBitmap=await createImageBitmap(sourcePhoto);
-  const can=$('editCanvas'),scale=Math.min(1,1000/editorBitmap.width);
-  can.width=Math.round(editorBitmap.width*scale);can.height=Math.round(editorBitmap.height*scale);
-  editorRect=null;$('photoEditor').hidden=false;editorDraw();
+  $('photoEditor').hidden=false;resetEditor();
  }catch(e){$('uploadMessage').textContent='Photo editor error: '+e.message}
 };
-$('editCancel').onclick=()=>{$('photoEditor').hidden=true};
+$('editCancel').onclick=()=>{$('photoEditor').hidden=true;editorPointer=null};
 $('editApply').onclick=async()=>{
- if(!editorBitmap||!editorRect)return;
- const can=$('editCanvas'),sx=editorBitmap.width/can.width,sy=editorBitmap.height/can.height;
- const rect=editorRect,out=document.createElement('canvas');
- out.width=Math.max(1,Math.round(rect.w*sx));out.height=Math.max(1,Math.round(rect.h*sy));
- out.getContext('2d').drawImage(editorBitmap,rect.x*sx,rect.y*sy,rect.w*sx,rect.h*sy,0,0,out.width,out.height);
- const blob=await new Promise(resolve=>out.toBlob(resolve,'image/jpeg',.94));
- if(!blob){$('uploadMessage').textContent='Could not crop the photograph.';return}
- applyChosen(new File([blob],'cropped-invoice.jpg',{type:'image/jpeg'}));
- $('photoEditor').hidden=true;$('restorePhoto').hidden=false;
+ if(!editorBitmap||busy)return;
+ $('editApply').disabled=true;
+ try{
+  // Render at export resolution, not the small editor display resolution.
+  // The clipping rectangle matches the exact gold guide; guide is not saved.
+  const maxFactor=Math.min(6,3000/EDIT.frameH,2500/EDIT.frameW);
+  const out=document.createElement('canvas');
+  out.width=Math.round(EDIT.frameW*maxFactor);
+  out.height=Math.round(EDIT.frameH*maxFactor);
+  const ctx=out.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
+  const scale=editorBaseScale()*editorTransform.zoom*maxFactor;
+  ctx.translate((EDIT.width/2+editorTransform.x-EDIT.frameX)*maxFactor,
+   (EDIT.height/2+editorTransform.y-EDIT.frameY)*maxFactor);
+  ctx.rotate(editorTransform.angle*Math.PI/180);
+  ctx.scale(scale,scale);
+  ctx.drawImage(editorBitmap,-editorBitmap.width/2,-editorBitmap.height/2);
+  const blob=await new Promise(resolve=>out.toBlob(resolve,'image/jpeg',.94));
+  if(!blob)throw Error('Could not export cropped invoice.');
+  if(blob.size>12*1024*1024)throw Error('Edited picture exceeds 12 MB. Reduce picture size or use the original.');
+  applyChosen(new File([blob],'cropped-invoice.jpg',{type:'image/jpeg'}));
+  $('photoEditor').hidden=true;$('restorePhoto').hidden=false;
+ }catch(e){$('uploadMessage').textContent=e.message}
+ finally{$('editApply').disabled=false}
 };
-$('restorePhoto').onclick=()=>{if(sourcePhoto)applyChosen(sourcePhoto);$('restorePhoto').hidden=true};
+$('restorePhoto').onclick=()=>{
+ if(sourcePhoto)applyChosen(sourcePhoto);
+ $('restorePhoto').hidden=true;
+};
 function showConfirm(){
  if(!selected||!chosen||busy)return;
  updateComplete();if($('save').disabled)return;
