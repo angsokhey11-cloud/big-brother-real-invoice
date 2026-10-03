@@ -13,7 +13,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid #d7e4ef}.invoice-viewer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invoice-viewer-body{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;background:#eaf0f7}
 .invoice-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}.invoice-viewer-body iframe{display:block;width:100%;height:100%;border:0;background:white}.invoice-viewer-body .hint{padding:15px}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
-.photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:100%;height:auto;max-height:55dvh;touch-action:none;background:#eaf0f6;cursor:crosshair}.photo-editor p{font-size:12px;color:#5e7690}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel{justify-content:center;padding:10px;gap:8px}.camera-panel video{display:block;width:100%;height:100%;object-fit:cover}.camera-stage{position:relative;flex:none;width:min(100%,calc((100dvh - 165px)* .71),510px);max-height:calc(100dvh - 165px);aspect-ratio:.71;min-height:0;overflow:hidden;border-radius:12px;background:#101b24}.camera-stage video{width:100%;height:100%;object-fit:cover}.camera-guide{position:absolute;inset:4%;border:3px solid #ffbb42;border-radius:8px;box-shadow:0 0 0 200vmax #07111a65;pointer-events:none}.camera-panel .buttons{flex-shrink:0;display:flex;justify-content:center}.camera-panel .buttons button{min-height:46px}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
+.photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:100%;height:auto;max-height:55dvh;touch-action:none;background:#eaf0f6;cursor:crosshair}.photo-editor p{font-size:12px;color:#5e7690}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel{justify-content:center;padding:10px;gap:8px}.camera-panel video{display:block;width:100%;height:100%;object-fit:cover}.camera-stage{position:relative;flex:none;width:min(100%,calc((100dvh - 165px)* .71),510px);max-height:calc(100dvh - 165px);aspect-ratio:.71;min-height:0;overflow:hidden;border-radius:12px;background:#101b24}.camera-stage video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.camera-stage #cameraCanvas{display:block;width:100%;height:100%;object-fit:fill}.camera-guide{position:absolute;inset:4%;border:3px solid #ffbb42;border-radius:8px;box-shadow:0 0 0 200vmax #07111a65;pointer-events:none}.camera-panel .buttons{flex-shrink:0;display:flex;justify-content:center}.camera-panel .buttons button{min-height:46px}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
@@ -45,14 +45,14 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
  <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong><button type="button" class="alt" id="invoiceViewerClose">✕ Close</button></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
-<div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage"><video id="cameraVideo" autoplay playsinline muted></video><div class="camera-guide"></div></div><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
+<div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage"><video id="cameraVideo" autoplay playsinline muted aria-hidden="true"></video><canvas id="cameraCanvas" width="710" height="1000" aria-label="Portrait live camera preview"></canvas><div class="camera-guide"></div></div><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
 <div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
 <script>
 (()=>{
 'use strict';
 const URL='https://sjfhlaclgmkwwofzstok.supabase.co', KEY='sb_publishable_w762jR65CWwlO30fKQsYOw_6L9grx8S',SESSION='BB_SUPABASE_DEV_SESSION_V1',BUCKET='bb-real-invoices';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorRect=null,editorStart=null,cameraStream=null;
+let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorRect=null,editorStart=null,cameraStream=null,cameraFrameId=0;
 
 const clean=v=>String(v??'').trim();
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
@@ -87,7 +87,22 @@ function normalizedInvoice(v){
  if(!/^[0-9]{1,10}$/.test(text))return null;
  return text.replace(/^0+/,'')||'0';
 }
+// Render every camera frame onto a genuinely portrait canvas. Android
+// frequently supplies landscape video even with portrait constraints; the
+// centered cover crop removes the horizontal strip/letterbox problem.
+function renderCamera(){
+ if(!cameraStream||$('cameraPanel').hidden)return;
+ const video=$('cameraVideo'),canvas=$('cameraCanvas'),ctx=canvas.getContext('2d');
+ if(video.readyState>=2&&video.videoWidth&&video.videoHeight){
+  const vw=video.videoWidth,vh=video.videoHeight,cw=canvas.width,ch=canvas.height;
+  const scale=Math.max(cw/vw,ch/vh);
+  const cropW=cw/scale,cropH=ch/scale;
+  ctx.drawImage(video,(vw-cropW)/2,(vh-cropH)/2,cropW,cropH,0,0,cw,ch);
+ }
+ cameraFrameId=requestAnimationFrame(renderCamera);
+}
 function stopCamera(){
+ if(cameraFrameId){cancelAnimationFrame(cameraFrameId);cameraFrameId=0}
  if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null}
  $('cameraPanel').hidden=true;$('cameraVideo').srcObject=null;
 }
@@ -95,35 +110,38 @@ async function startCamera(){
  $('uploadMessage').textContent='';
  if(!navigator.mediaDevices?.getUserMedia){$('camera').click();return}
  try{
-  cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:2560}},audio:false});
+  // Portrait is preferred, but the portrait canvas also handles phones that
+  // ignore camera aspectRatio constraints and supply 16:9 landscape video.
+  cameraStream=await navigator.mediaDevices.getUserMedia({
+   video:{facingMode:{ideal:'environment'},aspectRatio:{ideal:.71},width:{ideal:1280},height:{ideal:1800}},audio:false});
   $('cameraVideo').srcObject=cameraStream;
-  $('cameraPanel').hidden=false;await $('cameraVideo').play();
- }catch(e){stopCamera();$('uploadMessage').textContent='Live camera unavailable. Use Take Photo with the device camera instead.';$('camera').click()}
+  $('cameraPanel').hidden=false;
+  await $('cameraVideo').play();
+  renderCamera();
+ }catch(e){
+  stopCamera();
+  $('uploadMessage').textContent='Live camera unavailable. Use your device camera instead.';
+  $('camera').click();
+ }
 }
 $('cameraClose').onclick=stopCamera;
 $('cameraCapture').onclick=()=>{
- const video=$('cameraVideo');if(!video.videoWidth)return;
- // Crop the captured image to the SAME fixed frame visible in the
- // camera preview. The user can still make an additional manual crop later.
- const guide=$('cameraPanel').querySelector('.camera-guide').getBoundingClientRect();
- const vb=video.getBoundingClientRect();
- // object-fit:cover deliberately fills the portrait camera viewport.
- // Use the exact same COVER geometry when extracting the fixed gold frame.
- const factor=Math.max(vb.width/video.videoWidth,vb.height/video.videoHeight);
- const imageW=video.videoWidth*factor,imageH=video.videoHeight*factor;
- const imageX=vb.left+(vb.width-imageW)/2,imageY=vb.top+(vb.height-imageH)/2;
- const x1=Math.max(0,Math.min(video.videoWidth,(guide.left-imageX)/factor));
- const x2=Math.max(0,Math.min(video.videoWidth,(guide.right-imageX)/factor));
- const y1=Math.max(0,Math.min(video.videoHeight,(guide.top-imageY)/factor));
- const y2=Math.max(0,Math.min(video.videoHeight,(guide.bottom-imageY)/factor));
- const out=document.createElement('canvas');
- out.width=Math.max(1,Math.round(x2-x1));out.height=Math.max(1,Math.round(y2-y1));
- if(out.width<video.videoWidth*.12||out.height<video.videoHeight*.12){
-  $('uploadMessage').textContent='Camera frame is outside photo preview. Use Select Photo instead.';
-  stopCamera();return;
+ const canvas=$('cameraCanvas'),guide=$('cameraPanel').querySelector('.camera-guide').getBoundingClientRect();
+ const bounds=canvas.getBoundingClientRect();
+ if(!cameraStream||!canvas.width||!canvas.height)return;
+ // Capture from the EXACT portrait preview rather than recalculate from
+ // a separate landscape video with different fitting geometry.
+ const x=Math.max(0,(guide.left-bounds.left)/bounds.width*canvas.width);
+ const y=Math.max(0,(guide.top-bounds.top)/bounds.height*canvas.height);
+ const right=Math.min(canvas.width,(guide.right-bounds.left)/bounds.width*canvas.width);
+ const bottom=Math.min(canvas.height,(guide.bottom-bounds.top)/bounds.height*canvas.height);
+ const w=Math.round(right-x),h=Math.round(bottom-y);
+ if(w<canvas.width*.2||h<canvas.height*.2){
+  $('uploadMessage').textContent='Camera framing error. Please retry.';stopCamera();return;
  }
- out.getContext('2d').drawImage(video,x1,y1,x2-x1,y2-y1,0,0,out.width,out.height);
- out.toBlob(blob=>{
+ const result=document.createElement('canvas');result.width=w;result.height=h;
+ result.getContext('2d').drawImage(canvas,x,y,w,h,0,0,w,h);
+ result.toBlob(blob=>{
   stopCamera();
   if(blob)setFile(new File([blob],'camera-invoice.jpg',{type:'image/jpeg'}));
  },'image/jpeg',.94);
