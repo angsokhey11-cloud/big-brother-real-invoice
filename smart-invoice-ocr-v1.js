@@ -174,40 +174,57 @@ function selectedDigitReading(result){
  return items.length===1?items[0]:null;
 }
 async function scanSelectedDigits(file,expected){
- const specs=[
-  {name:'original',mode:7},
-  {name:'grayscale',mode:7},
-  {name:'binary',mode:7},
-  {name:'grayscale-single-word',mode:8}
+ // Prioritize the untouched image. Grayscale can destroy the open loop in
+ // camera-photographed digits such as 9, so it is diagnostic/fallback only.
+ const originals=[
+  {name:'original-line',mode:7},
+  {name:'original-word',mode:8},
+  {name:'original-raw-line',mode:13}
  ];
- const images=new Map(),readings=[];
- for(const spec of specs){
-  const imageName=spec.name.split('-')[0];
-  if(!images.has(imageName))images.set(imageName,await digitImage(file,imageName));
-  const result=await window.Tesseract.recognize(images.get(imageName),'eng',{
+ const readings=[],originalImage=await digitImage(file,'original');
+ const scan=async(spec,image)=>{
+  const result=await window.Tesseract.recognize(image,'eng',{
    logger:()=>{},tessedit_pageseg_mode:spec.mode,
    tessedit_char_whitelist:'0123456789'
   });
   const number=selectedDigitReading(result);
-  if(number)readings.push({variant:spec.name,raw:number,value:normalize(number)});
-  else readings.push({variant:spec.name,raw:'',value:'',
-   observed:String(result?.data?.text||'').replace(/\\s+/g,' ').trim().slice(0,50)});
- }
+  const item={variant:spec.name,raw:number||'',value:number?normalize(number):'',
+   observed:String(result?.data?.text||'').replace(/\\s+/g,' ').trim().slice(0,50)};
+  readings.push(item);
+  return item;
+ };
+ for(const spec of originals)await scan(spec,originalImage);
+ const originalValid=readings.filter(item=>item.value);
  const groups=new Map();
- for(const item of readings)if(item.value)groups.set(item.value,(groups.get(item.value)||[]).concat(item));
- const matching=groups.get(expected)||[];
- const competing=[...groups.entries()].filter(([value,items])=>value!==expected&&items.length>=2);
- const visible=readings.map(r=>r.variant+': '+(r.raw||'[unreadable '+(r.observed||'blank')+']')).join(' · ');
- // Never trust one guessed number or break a tie using the expected number.
- if(matching.length>=2&&competing.length===0){
-  return {status:'match',scanned:matching[0].raw,
-   candidates:[...new Set(readings.map(r=>r.raw))],
-   message:'Selected number verified by multiple scans. '+visible};
+ for(const item of originalValid)groups.set(item.value,(groups.get(item.value)||[]).concat(item));
+ const originalConsensus=[...groups.entries()].filter(([,votes])=>votes.length>=2);
+ const show=()=>readings.map(r=>r.variant+': '+(r.raw||'[unreadable '+(r.observed||'blank')+']')).join(' · ');
+ // Accept corroborated original-image reads only if the other original
+ // settings do not produce a conflicting complete serial. Never choose
+ // the expected number to break an ambiguous original-image result.
+ if(originalConsensus.length===1&&originalValid.every(r=>r.value===originalConsensus[0][0])){
+  if(originalConsensus[0][0]===expected)
+   return {status:'match',scanned:originalConsensus[0][1][0].raw,
+    candidates:[...new Set(originalValid.map(r=>r.raw))],
+    message:'Original-photo number verified across multiple recognition modes. '+show()};
+  return {status:'unclear',scanned:originalConsensus[0][1][0].raw,
+   candidates:[...new Set(originalValid.map(r=>r.raw))],
+   message:'Original-photo OCR read a different number. Inspect the actual paper number or request administrator review. '+show()};
  }
- return {status:'unclear',scanned:'',candidates:[...new Set(readings.map(r=>r.raw))],
-  message:readings.some(r=>r.value)
-   ?'OCR readings: '+visible+'. Cannot verify confidently; adjust the selection or use authorized administrator review.'
-   :'No complete number detected. Raw readings: '+visible+'. Adjust the box to include all digits with a little margin, or request administrator review.'};
+ // Fallback for poor lighting; never let grayscale override a conflicting
+ // original-image result or turn an unclear paper number into approval.
+ if(!originalValid.length){
+  await scan({name:'grayscale-line',mode:7},await digitImage(file,'grayscale'));
+  await scan({name:'grayscale-word',mode:8},await digitImage(file,'grayscale'));
+  const valid=readings.filter(r=>r.value);
+  if(valid.length>=2&&valid.every(r=>r.value===expected))
+   return {status:'match',scanned:valid[0].raw,
+    candidates:[...new Set(valid.map(r=>r.raw))],
+    message:'Grayscale fallback verified the selected number twice. '+show()};
+ }
+ return {status:'unclear',scanned:'',
+  candidates:[...new Set(readings.filter(r=>r.raw).map(r=>r.raw))],
+  message:'OCR readings: '+show()+'. Cannot verify confidently. Inspect the original number or use authorized administrator review.'};
 }
 function script(){
  if(window.Tesseract?.recognize)return Promise.resolve();
