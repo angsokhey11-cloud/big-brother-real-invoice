@@ -11,22 +11,28 @@ button:disabled{opacity:.45;cursor:wait}input{padding:9px;max-width:100%}.line{d
 canvas{width:100%;height:auto;max-height:540px;object-fit:contain;border:1px solid #aac5e3;border-radius:8px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace;background:#eef4fa;padding:10px;border-radius:8px}
 .good{color:#087846}.bad{color:#ad5631}small{color:#5b7188}.hidden{display:none}
-#shapeEditor[hidden]{display:none}#shapeCanvas{touch-action:none;max-height:68vh;cursor:crosshair}#shapeOutput{max-width:420px}#shapeControls{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}.hint{color:#59738c}.shape-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:15px}.shape-cols canvas{max-height:490px;object-fit:contain}</style></head><body><main>
+#shapeEditor[hidden]{display:none}#shapeCanvas{touch-action:none;max-height:68vh;cursor:grab}#shapeOutput{max-width:420px}#shapeControls{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}.hint{color:#59738c}.shape-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:15px}.shape-cols canvas{max-height:490px;object-fit:contain}</style></head><body><main>
 <h1>🧪 BIG BROTHER · OCR Test Laboratory</h1>
 <aside>Development-only diagnostic page. It never contacts Supabase, saves an invoice, uploads customer photos or changes the live scanner. OCR executes in this browser through Tesseract.js (loaded from a CDN). Photos stay in your browser; only load test images you are permitted to process here.</aside>
 <section class="line"><label>Original invoice photographs <input id="photos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Optional expected numbers (same photo order, commas)<input id="expected" placeholder="001664, 001663, ..."></label><button id="paste" type="button">📋 Paste from Clipboard</button><button id="run">Analyze photos</button><button id="clear" type="button">Clear photos</button></section>
 <section id="pasteZone" tabindex="0" style="border:2px dashed #a7bfdd;text-align:center;cursor:text" aria-label="Clipboard paste area">Click here and press <b>Ctrl+V</b> (or ⌘V on Mac), or use the Paste from Clipboard button.</section>
 <p id="queue" aria-live="polite">0 photos selected.</p>
-<section><h2>📐 Invoice Shape Editor <small>Experimental · original photo retained</small></h2>
-<p>First paste or choose an invoice photo. Select it below, position the four corner handles on the PAPER corners, then press Straighten. This corrects perspective rather than relying on ink color.</p>
-<div id="shapeControls"><label>Photo to correct <select id="shapePhoto"></select></label><button id="shapeOpen" type="button">Edit invoice shape</button></div>
+<section><h2>📐 Fixed-frame Invoice Editor <small>Experimental · original retained</small></h2>
+<p>The orange portrait frame stays FIXED. Drag the photo behind it; zoom and rotate until the paper fills its four corners. Then add the aligned copy to the test queue. This does not bend or alter paper perspective.</p>
+<div id="shapeControls"><label>Photo to align <select id="shapePhoto"></select></label><button id="shapeOpen" type="button">Open fixed frame</button></div>
 <div id="shapeEditor" hidden>
-<p id="shapeMsg" aria-live="polite">Drag the four corner handles in order: top-left, top-right, bottom-right, bottom-left.</p>
-<div class="shape-cols"><div><h3>1. Place invoice corners</h3><canvas id="shapeCanvas" aria-label="Drag the four invoice corners"></canvas></div>
-<div><h3>2. Corrected preview</h3><canvas id="shapeOutput"></canvas></div></div>
-<div id="shapeControls"><label>Output layout <select id="shapeRatio"><option value="0.71">Standard portrait invoice</option><option value="0.78">Wider invoice</option><option value="1">Square</option></select></label>
-<button id="shapeReset" type="button">Reset corners</button><button id="shapeApply" type="button">Straighten and add corrected image</button></div>
-<p class="hint">Perspective correction only; no automatic corner recognition yet. Corrected images are added to the test queue, never uploaded. Your original remains available for comparison.</p>
+<p id="shapeMsg" aria-live="polite">Drag photo to reposition it; adjust zoom and rotation until the four paper corners meet the frame.</p>
+<div class="shape-cols"><div><h3>1. Move photo under fixed frame</h3><canvas id="shapeCanvas" aria-label="Fixed invoice frame. Drag photo to move; use controls to zoom or rotate."></canvas></div>
+<div><h3>2. Aligned preview</h3><canvas id="shapeOutput"></canvas></div></div>
+<div id="shapeControls">
+<label>Zoom <input id="shapeZoom" type="range" min="60" max="300" value="100" step="1"><output id="shapeZoomValue">100%</output></label>
+<label>Rotate <input id="shapeRotate" type="range" min="-30" max="30" value="0" step=".5"><output id="shapeRotateValue">0°</output></label>
+<button id="shapeMinus" type="button">− Zoom</button><button id="shapePlus" type="button">+ Zoom</button>
+<button id="shapeTurnLeft" type="button">↶ 90°</button><button id="shapeTurnRight" type="button">↷ 90°</button>
+<button id="shapeReset" type="button">Reset photo</button>
+<button id="shapeApply" type="button">Crop fixed frame & add corrected image</button>
+</div>
+<p class="hint">The original remains untouched. A fixed frame corrects size, rotation and position; photos with strong perspective skew may still require a separate perspective tool.</p>
 </div></section>
 <p id="status">Choose one or more existing invoice photographs. No new invoice needed.</p><div id="results"></div>
 </main>
@@ -86,132 +92,129 @@ $('photos').addEventListener('change',queueStatus);
 $('pasteZone').onclick=()=>$('pasteZone').focus();
 // Isolated four-corner perspective editor. Source image is read locally and
 // never modified; normalized output joins the laboratory test queue only.
-let shapeBitmap=null,shapeOriginal=null,shapeCorners=null,shapeDrag=-1;
+// Fixed-frame editor: photo moves beneath the unchanging standard invoice
+// frame. Image is local, and corrected copies enter the lab queue only.
+let shapeBitmap=null,shapeScale=1,shapeX=0,shapeY=0,shapeDegrees=0,shapeDrag=null;
 const shapeCanvas=$('shapeCanvas'),shapeOutput=$('shapeOutput');
-const shapeDefault=()=>[
- {x:shapeCanvas.width*.04,y:shapeCanvas.height*.04},
- {x:shapeCanvas.width*.96,y:shapeCanvas.height*.04},
- {x:shapeCanvas.width*.96,y:shapeCanvas.height*.96},
- {x:shapeCanvas.width*.04,y:shapeCanvas.height*.96}
-];
-function shapeDraw(){
- if(!shapeOriginal||!shapeCorners)return;
- const ctx=shapeCanvas.getContext('2d');
- ctx.putImageData(shapeOriginal,0,0);
- ctx.strokeStyle='#ff9b20';ctx.lineWidth=Math.max(2,shapeCanvas.width/220);
- ctx.beginPath();
- shapeCorners.forEach((p,i)=>{if(i)ctx.lineTo(p.x,p.y);else ctx.moveTo(p.x,p.y)});
- ctx.closePath();ctx.stroke();
- const names=['TL','TR','BR','BL'];
- shapeCorners.forEach((p,i)=>{
-  ctx.fillStyle='#136dd3';ctx.beginPath();ctx.arc(p.x,p.y,Math.max(9,shapeCanvas.width*.013),0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='white';ctx.font='bold '+Math.max(12,shapeCanvas.width*.016)+'px Arial';
-  ctx.fillText(names[i],p.x+10,p.y-10);
- });
-}
-function shapePoint(e){
+const SW=640,SH=840;
+const FRAME={x:89,y:24,w:462,h:792}; // fixed portrait frame, ~0.583 ratio
+function clamp(v,a,b){return Math.min(b,Math.max(a,v))}
+function shapePosition(e){
  const r=shapeCanvas.getBoundingClientRect();
- // Canvas is object-fit contained; its CSS content may be letterboxed.
- const scale=Math.min(r.width/shapeCanvas.width,r.height/shapeCanvas.height);
- const dw=shapeCanvas.width*scale,dh=shapeCanvas.height*scale;
- const ox=r.left+(r.width-dw)/2,oy=r.top+(r.height-dh)/2;
- return {x:Math.max(0,Math.min(shapeCanvas.width,(e.clientX-ox)/scale)),
-  y:Math.max(0,Math.min(shapeCanvas.height,(e.clientY-oy)/scale))};
+ const scale=Math.min(r.width/SW,r.height/SH);
+ const x=r.left+(r.width-SW*scale)/2,y=r.top+(r.height-SH*scale)/2;
+ return {x:(e.clientX-x)/scale,y:(e.clientY-y)/scale};
 }
+function shapePhotoDraw(ctx,ox,oy){
+ ctx.save();
+ ctx.translate(ox,oy);
+ ctx.rotate(shapeDegrees*Math.PI/180);
+ const width=shapeBitmap.width*shapeScale,height=shapeBitmap.height*shapeScale;
+ ctx.drawImage(shapeBitmap,-width/2,-height/2,width,height);
+ ctx.restore();
+}
+function shapePreview(){
+ if(!shapeBitmap)return;
+ // Render exactly what lies within the fixed frame into a standardized
+ // high-resolution canvas. The original image is never overwritten.
+ shapeOutput.width=960;shapeOutput.height=1352;
+ const out=shapeOutput.getContext('2d');
+ out.fillStyle='#fff';out.fillRect(0,0,960,1352);
+ out.save();out.scale(960/FRAME.w,1352/FRAME.h);
+ out.translate(-FRAME.x,-FRAME.y);
+ shapePhotoDraw(out,SW/2+shapeX,SH/2+shapeY);
+ out.restore();
+}
+function shapeDraw(){
+ if(!shapeBitmap)return;
+ shapeCanvas.width=SW;shapeCanvas.height=SH;
+ const ctx=shapeCanvas.getContext('2d');
+ ctx.fillStyle='#263847';ctx.fillRect(0,0,SW,SH);
+ shapePhotoDraw(ctx,SW/2+shapeX,SH/2+shapeY);
+ // Dim the outside, keeping the fixed frame itself unchanged.
+ ctx.fillStyle='rgba(9,20,34,.55)';
+ ctx.fillRect(0,0,SW,FRAME.y);
+ ctx.fillRect(0,FRAME.y,FRAME.x,FRAME.h);
+ ctx.fillRect(FRAME.x+FRAME.w,FRAME.y,SW-FRAME.x-FRAME.w,FRAME.h);
+ ctx.fillRect(0,FRAME.y+FRAME.h,SW,SH-FRAME.y-FRAME.h);
+ ctx.strokeStyle='#ffae28';ctx.lineWidth=4;
+ ctx.strokeRect(FRAME.x,FRAME.y,FRAME.w,FRAME.h);
+ ctx.fillStyle='#ffae28';ctx.font='bold 15px Arial';
+ ctx.fillText('FIXED INVOICE FRAME',FRAME.x+12,FRAME.y+23);
+ shapePreview();
+ $('shapeZoomValue').textContent=$('shapeZoom').value+'%';
+ $('shapeRotateValue').textContent=Number($('shapeRotate').value)+'°';
+}
+function shapeFit(){
+ if(!shapeBitmap)return;
+ // Fit the entire invoice/photo inside the fixed frame initially.
+ const base=Math.min(FRAME.w/shapeBitmap.width,FRAME.h/shapeBitmap.height);
+ shapeScale=base;shapeX=0;shapeY=0;shapeDegrees=0;
+ $('shapeZoom').value=100;$('shapeRotate').value=0;
+ shapeDraw();
+}
+$('shapeOpen').onclick=async()=>{
+ const file=allPhotos()[Number($('shapePhoto').value)];
+ $('shapeEditor').hidden=false;
+ if(!file){$('shapeMsg').textContent='Paste or choose an invoice first.';return}
+ try{
+  const bmp=await createImageBitmap(file);
+  if(shapeBitmap)shapeBitmap.close();
+  shapeBitmap=bmp;
+  $('shapeMsg').textContent='Editing '+file.name+'. The frame is fixed: drag, zoom and rotate the photo to fit.';
+  shapeFit();
+ }catch(e){$('shapeMsg').textContent='Could not open photo: '+e.message}
+};
 shapeCanvas.addEventListener('pointerdown',e=>{
- if(!shapeCorners)return;
- const p=shapePoint(e);
- shapeDrag=shapeCorners.map(c=>Math.hypot(c.x-p.x,c.y-p.y)).indexOf(
-  Math.min(...shapeCorners.map(c=>Math.hypot(c.x-p.x,c.y-p.y))));
- shapeCanvas.setPointerCapture(e.pointerId);shapeCorners[shapeDrag]=p;shapeDraw();
+ if(!shapeBitmap)return;
+ e.preventDefault();
+ const p=shapePosition(e);shapeDrag={x:p.x,y:p.y,startX:shapeX,startY:shapeY};
+ shapeCanvas.setPointerCapture(e.pointerId);
 });
 shapeCanvas.addEventListener('pointermove',e=>{
- if(shapeDrag<0)return;
- shapeCorners[shapeDrag]=shapePoint(e);shapeDraw();
+ if(!shapeDrag)return;
+ const p=shapePosition(e);
+ shapeX=shapeDrag.startX+p.x-shapeDrag.x;
+ shapeY=shapeDrag.startY+p.y-shapeDrag.y;
+ shapeDraw();
 });
-for(const kind of ['pointerup','pointercancel'])shapeCanvas.addEventListener(kind,()=>{shapeDrag=-1});
-$('shapeReset').onclick=()=>{if(!shapeBitmap)return;shapeCorners=shapeDefault();shapeDraw();$('shapeMsg').textContent='Corners reset. Drag each blue handle onto the paper corner.'};
-$('shapeOpen').onclick=async()=>{
- const i=Number($('shapePhoto').value),file=allPhotos()[i];
- if(!file){$('shapeMsg').textContent='Select or paste an invoice photo first.';$('shapeEditor').hidden=false;return}
- try{
-  const bitmap=await createImageBitmap(file);
-  if(shapeBitmap)shapeBitmap.close();
-  shapeBitmap=bitmap;
-  const ratio=Math.min(1,1100/bitmap.width,1300/bitmap.height);
-  shapeCanvas.width=Math.max(1,Math.round(bitmap.width*ratio));
-  shapeCanvas.height=Math.max(1,Math.round(bitmap.height*ratio));
-  const ctx=shapeCanvas.getContext('2d',{willReadFrequently:true});
-  ctx.drawImage(bitmap,0,0,shapeCanvas.width,shapeCanvas.height);
-  shapeOriginal=ctx.getImageData(0,0,shapeCanvas.width,shapeCanvas.height);
-  shapeCorners=shapeDefault();$('shapeEditor').hidden=false;
-  $('shapeMsg').textContent='Editing '+file.name+'. Drag the blue handles to the FOUR corners of the paper.';
-  shapeDraw();
- }catch(err){$('shapeMsg').textContent='Could not open photo: '+err.message;$('shapeEditor').hidden=false}
+for(const kind of ['pointerup','pointercancel'])shapeCanvas.addEventListener(kind,()=>{shapeDrag=null});
+$('shapeZoom').oninput=()=>{
+ if(!shapeBitmap)return;
+ const base=Math.min(FRAME.w/shapeBitmap.width,FRAME.h/shapeBitmap.height);
+ shapeScale=base*Number($('shapeZoom').value)/100;
+ shapeDraw();
 };
-// Solve eight projective mapping coefficients from four corresponding pairs.
-// Destination coordinates map to SOURCE coordinates (inverse warp).
-function solveProjective(src,dst){
- const A=[],b=[];
- for(let i=0;i<4;i++){
-  const u=dst[i].x,v=dst[i].y,x=src[i].x,y=src[i].y;
-  A.push([u,v,1,0,0,0,-u*x,-v*x]);b.push(x);
-  A.push([0,0,0,u,v,1,-u*y,-v*y]);b.push(y);
- }
- for(let k=0;k<8;k++){
-  let pivot=k;
-  for(let j=k+1;j<8;j++)if(Math.abs(A[j][k])>Math.abs(A[pivot][k]))pivot=j;
-  if(Math.abs(A[pivot][k])<1e-9)throw Error('Invalid paper corners. Reset them and try again.');
-  [A[k],A[pivot]]=[A[pivot],A[k]];[b[k],b[pivot]]=[b[pivot],b[k]];
-  const div=A[k][k];for(let n=k;n<8;n++)A[k][n]/=div;b[k]/=div;
-  for(let j=0;j<8;j++)if(j!==k){
-   const v=A[j][k];for(let n=k;n<8;n++)A[j][n]-=v*A[k][n];b[j]-=v*b[k];
-  }
- }
- return [...b,1];
+$('shapeRotate').oninput=()=>{shapeDegrees=Number($('shapeRotate').value);shapeDraw()};
+function shapeZoomStep(step){
+ $('shapeZoom').value=clamp(Number($('shapeZoom').value)+step,60,300);
+ $('shapeZoom').dispatchEvent(new Event('input'));
 }
-function projected(p,u,v){
- const den=p[6]*u+p[7]*v+1;
- return {x:(p[0]*u+p[1]*v+p[2])/den,y:(p[3]*u+p[4]*v+p[5])/den};
+$('shapeMinus').onclick=()=>shapeZoomStep(-10);
+$('shapePlus').onclick=()=>shapeZoomStep(10);
+function shapeQuarter(degrees){
+ if(!shapeBitmap)return;
+ // Quarter-turn changes the underlying rotation, while the fine slider
+ // continues to represent only the +/- 30 degree adjustment.
+ shapeDegrees+=degrees;shapeDraw();
 }
-function rectifyPhoto(source,corners,width,height){
- const output=document.createElement('canvas');output.width=width;output.height=height;
- const out=output.getContext('2d',{willReadFrequently:true});
- const target=[{x:0,y:0},{x:width-1,y:0},{x:width-1,y:height-1},{x:0,y:height-1}];
- const m=solveProjective(corners,target);
- const src=source.data,dst=out.createImageData(width,height);
- for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-  const p=projected(m,x,y),sx=p.x,sy=p.y,d=(y*width+x)*4;
-  if(sx<0||sy<0||sx>=source.width-1||sy>=source.height-1){
-   dst.data[d]=dst.data[d+1]=dst.data[d+2]=dst.data[d+3]=255;continue;
-  }
-  const xi=Math.floor(sx),yi=Math.floor(sy),fx=sx-xi,fy=sy-yi;
-  const k=(yi*source.width+xi)*4,a=(1-fx)*(1-fy),b=fx*(1-fy),c=(1-fx)*fy,e=fx*fy;
-  for(let ch=0;ch<3;ch++)dst.data[d+ch]=src[k+ch]*a+src[k+4+ch]*b+
-   src[k+source.width*4+ch]*c+src[k+source.width*4+4+ch]*e;
-  dst.data[d+3]=255;
- }
- out.putImageData(dst,0,0);return output;
-}
+$('shapeTurnLeft').onclick=()=>shapeQuarter(-90);
+$('shapeTurnRight').onclick=()=>shapeQuarter(90);
+$('shapeReset').onclick=()=>{shapeFit();$('shapeMsg').textContent='Photo reset; orange frame stays fixed.'};
 $('shapeApply').onclick=async()=>{
- if(!shapeOriginal||!shapeCorners)return;
+ if(!shapeBitmap)return;
  const btn=$('shapeApply');btn.disabled=true;
  try{
-  const w=960,h=Math.round(w/Number($('shapeRatio').value));
-  // Check quadrilateral has meaningful area and ordered noncrossing corners.
-  const area=shapeCorners.reduce((sum,p,i)=>{
-   const q=shapeCorners[(i+1)%4];return sum+p.x*q.y-q.x*p.y;
-  },0)/2;
-  if(area<shapeCanvas.width*shapeCanvas.height*.045)throw Error('Corners are crossed or paper area is too small.');
-  const corrected=rectifyPhoto({data:shapeOriginal.data,width:shapeCanvas.width,height:shapeCanvas.height},shapeCorners,w,h);
-  shapeOutput.width=w;shapeOutput.height=h;shapeOutput.getContext('2d').drawImage(corrected,0,0);
+  // Re-render at export time; never save the lower-resolution overlay.
+  shapePreview();
   const blob=await new Promise(resolve=>shapeOutput.toBlob(resolve,'image/png'));
-  if(!blob)throw Error('Could not create the corrected image.');
-  const original=allPhotos()[Number($('shapePhoto').value)];
-  const filename='straightened-'+(original?.name||'invoice').replace(/\.[^.]+$/,'')+'.png';
-  pastedPhotos.push(new File([blob],filename,{type:'image/png'}));queueStatus();
-  $('shapeMsg').textContent='Corrected picture added! Select Analyze photos to compare original and straightened versions. Original unchanged.';
- }catch(err){$('shapeMsg').textContent='Could not straighten: '+err.message}
+  if(!blob)throw Error('Unable to generate aligned image');
+  const source=allPhotos()[Number($('shapePhoto').value)];
+  const name='framed-'+(source?.name||'invoice').replace(/\.[^.]+$/,'')+'.png';
+  pastedPhotos.push(new File([blob],name,{type:'image/png'}));
+  queueStatus();
+  $('shapeMsg').textContent='Framed copy added. Click Analyze photos to compare original and aligned photo. Original unchanged.';
+ }catch(err){$('shapeMsg').textContent='Cropping failed: '+err.message}
  finally{btn.disabled=false}
 };
 
