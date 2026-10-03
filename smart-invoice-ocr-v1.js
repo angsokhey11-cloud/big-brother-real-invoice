@@ -190,12 +190,14 @@ async function scanSelectedDigits(file,expected){
   });
   const number=selectedDigitReading(result);
   if(number)readings.push({variant:spec.name,raw:number,value:normalize(number)});
+  else readings.push({variant:spec.name,raw:'',value:'',
+   observed:String(result?.data?.text||'').replace(/\\s+/g,' ').trim().slice(0,50)});
  }
  const groups=new Map();
- for(const item of readings)groups.set(item.value,(groups.get(item.value)||[]).concat(item));
+ for(const item of readings)if(item.value)groups.set(item.value,(groups.get(item.value)||[]).concat(item));
  const matching=groups.get(expected)||[];
  const competing=[...groups.entries()].filter(([value,items])=>value!==expected&&items.length>=2);
- const visible=readings.map(r=>r.variant+': '+r.raw).join(' · ');
+ const visible=readings.map(r=>r.variant+': '+(r.raw||'[unreadable '+(r.observed||'blank')+']')).join(' · ');
  // Never trust one guessed number or break a tie using the expected number.
  if(matching.length>=2&&competing.length===0){
   return {status:'match',scanned:matching[0].raw,
@@ -203,9 +205,9 @@ async function scanSelectedDigits(file,expected){
    message:'Selected number verified by multiple scans. '+visible};
  }
  return {status:'unclear',scanned:'',candidates:[...new Set(readings.map(r=>r.raw))],
-  message:readings.length
+  message:readings.some(r=>r.value)
    ?'OCR readings: '+visible+'. Cannot verify confidently; adjust the selection or use authorized administrator review.'
-   :'Could not isolate a complete invoice number. Adjust the box to include all digits with a little margin, or request administrator review.'};
+   :'No complete number detected. Raw readings: '+visible+'. Adjust the box to include all digits with a little margin, or request administrator review.'};
 }
 function script(){
  if(window.Tesseract?.recognize)return Promise.resolve();
