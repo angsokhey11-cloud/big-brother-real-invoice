@@ -146,15 +146,31 @@ async function analyze(file,expected,i,worker){
  // Never silently accept a match merely because the expected number exists.
  rects.push({x:base.width*.48,y:base.height*.13,w:base.width*.47,h:base.height*.13,basis:'wide header, including leftmost digit'});
  rects.push({x:base.width*.52,y:base.height*.19,w:base.width*.41,h:base.height*.10,basis:'lower shifted header'});
+ // The wide header is for diagnosis, NOT an OCR-ready digits-only crop.
+ // The photographed serial in our test invoices occupies a narrow strip
+ // ABOVE the dotted line; keep the upper/lower variants visible for comparison.
+ const narrow=[
+  {x:.615,y:.190,w:.190,h:.047,basis:'digits only / standard'},
+  {x:.598,y:.174,w:.233,h:.058,basis:'digits only / shifted upward'},
+  {x:.592,y:.207,w:.238,h:.046,basis:'digits only / shifted downward'}
+ ];
  const readings=[];
+ await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
  for(const rect of rects){
+  // Show where the old approach failed, but do not count this cluttered
+  // header in confirmation or mix handwritten dates with the serial.
   const sample=crop(base,rect);
-  await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
+  showCanvas(section,'Header location preview: '+rect.basis+' (not used as number OCR)',sample);
+ }
+ for(const preset of narrow){
+  const rect={x:base.width*preset.x,y:base.height*preset.y,
+   w:base.width*preset.w,h:base.height*preset.h,basis:preset.basis};
+  const sample=crop(base,rect);
   const scanned=await worker.recognize(sample);
   const raw=String(scanned.data?.text||'').trim();
   const value=digits(raw);
   readings.push({name:rect.basis,raw,value});
-  showCanvas(section,'Crop: '+rect.basis+' — '+(value||'[unreadable]'),sample);
+  showCanvas(section,'Number-only candidate: '+rect.basis+' — '+(value||'[unreadable]'),sample);
  }
  const readingsDistinct=[...new Set([found,...readings.map(x=>x.value)].filter(Boolean))];
  const result=document.createElement('p');
