@@ -222,15 +222,15 @@ function script(){
 function labelledNumbers(data){
  const output=[];
  const lines=String(data?.text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
- const label=/(?:\\binv(?:oice)?[.\\s:-]*(?:no\\.?|number|#)?\\s*[:#.]?|លេខ\\s*(?:វិក្កយបត្រ|បង្កាន់ដៃ))/i;
- const digit=s=>String(s||'').replace(/[\\s-]/g,'').replace(/[Ｏ０]/g,'0');
+ const label=/(?:\binv(?:oice)?[.\s:-]*(?:no\.?|number|#)?\s*[:#.]?|លេខ\s*(?:វិក្កយបត្រ|បង្កាន់ដៃ))/i;
+ const digit=s=>String(s||'').replace(/[\s-]/g,'').replace(/[Ｏ０]/g,'0');
  for(let i=0;i<lines.length;i++){
   const match=lines[i].match(label);
   if(!match)continue;
   const tail=lines[i].slice(match.index+match[0].length);
   const near=tail.match(/(?:^|[^0-9])([0-9]{4,8})(?![0-9])/);
   if(near)output.push(near[1]);
-  else if(i+1<lines.length&&/^[:# .]*[0-9]{4,8}\\b/.test(lines[i+1]))
+  else if(i+1<lines.length&&/^[:# .]*[0-9]{4,8}\b/.test(lines[i+1]))
    output.push(lines[i+1].match(/[0-9]{4,8}/)[0]);
  }
  // Tesseract often splits labels and serial into nearby bounding-box words.
