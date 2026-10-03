@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BIG BROTHER · Invoice OCR Laboratory</title>
+<style>
+:root{font-family:system-ui,Arial;color:#173757;background:#eff5fb}*{box-sizing:border-box}
+main{max-width:940px;margin:22px auto;padding:0 14px}h1{margin-bottom:5px}
+aside{background:#fff7e6;padding:12px;border:1px solid #eecb87;border-radius:10px;margin:14px 0}
+section{background:white;border:1px solid #cdd9eb;border-radius:14px;padding:16px;margin:15px 0}
+button,input{font:inherit}button{background:#1868c4;color:#fff;border:0;padding:10px 18px;border-radius:9px;cursor:pointer}
+button:disabled{opacity:.45;cursor:wait}input{padding:9px;max-width:100%}.line{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+canvas{width:100%;height:auto;max-height:540px;object-fit:contain;border:1px solid #aac5e3;border-radius:8px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace;background:#eef4fa;padding:10px;border-radius:8px}
+.good{color:#087846}.bad{color:#ad5631}small{color:#5b7188}.hidden{display:none}
+</style></head><body><main>
+<h1>🧪 BIG BROTHER · OCR Test Laboratory</h1>
+<aside>Development-only diagnostic page. It never contacts Supabase, saves an invoice, uploads customer photos or changes the live scanner. OCR executes in this browser through Tesseract.js (loaded from a CDN). Photos stay in your browser; only load test images you are permitted to process here.</aside>
+<section class="line"><label>Original invoice photographs <input id="photos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Optional expected numbers (same photo order, commas)<input id="expected" placeholder="001664, 001663, ..."></label><button id="run">Analyze photos</button></section>
+<p id="status">Choose one or more existing invoice photographs. No new invoice needed.</p><div id="results"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+'use strict';
+const $=x=>document.getElementById(x), results=$('results');
+function digits(text){return String(text||'').replace(/[Ｏ０]/g,'0').replace(/[Ｉｌ]/g,'1').replace(/\s+/g,'').match(/^(?:0[0-9]{5}|[0-9]{6})$/)?.[0]||''}
+function norm(v){const d=String(v||'').replace(/\D/g,'');return d?String(BigInt(d)):''}
+function headerLabel(text){return /\binv(?:oice)?\.?\s*(?:no\.?|number|#)\s*[:.]?/i.test(text)}
+function lineSerial(text){
+ const lines=String(text||'').split(/\r?\n/);
+ for(let i=0;i<lines.length;i++){
+  const m=lines[i].match(/\binv(?:oice)?\.?\s*(?:no\.?|number|#)\s*[:.]?/i);
+  if(!m)continue;
+  const tail=lines[i].slice(m.index+m[0].length);
+  const number=tail.match(/(?:^|\D)(\d{6})(?!\d)/);
+  if(number)return number[1];
+  if(i+1<lines.length){const next=lines[i+1].match(/^\s*(\d{6})(?!\d)/);if(next)return next[1]}
+ }
+ return '';
+}
+function gatherWords(data){
+ const direct=Array.isArray(data.words)?data.words:[];
+ if(direct.length)return direct;
+ const blocks=data.blocks||[];
+ return blocks.flatMap(b=>(b.paragraphs||[]).flatMap(p=>(p.lines||[]).flatMap(l=>l.words||[])));
+}
+function boxForHeader(words,w,h){
+ // Text geometry rather than pixel color. A printed "Inv. No:" label
+ // anchors the position of the serial on a skewed or shifted paper.
+ const candidates=words.filter(x=>x?.bbox&&/^(inv\.?|invoice|no\.?|number)$/i.test(x.text?.trim()||''));
+ const serial=words.filter(x=>x?.bbox&&digits(x.text));
+ const imgWidth=w;
+ for(const label of candidates){
+  const b=label.bbox,y=(b.y0+b.y1)/2;
+  const close=serial.filter(s=>s.bbox.x0>b.x0 &&
+   s.bbox.x0-b.x1<imgWidth*.34 &&
+   Math.abs((s.bbox.y0+s.bbox.y1)/2-y)<Math.max(38,(b.y1-b.y0)*1.6))
+   .sort((a,b)=>a.bbox.x0-b.bbox.x0);
+  if(close.length){
+   const n=close[0].bbox;
+   return {x:Math.max(0,n.x0-12),y:Math.max(0,n.y0-12),
+    w:Math.min(w-n.x0+12,n.x1-n.x0+24),h:Math.min(h-n.y0+12,n.y1-n.y0+24),
+    basis:'label-neighbor word geometry'};
+  }
+ }
+ return null;
+}
+function crop(canvas,rect){
+ const out=document.createElement('canvas');
+ const x=Math.max(0,Math.floor(rect.x)),y=Math.max(0,Math.floor(rect.y));
+ const w=Math.max(1,Math.min(canvas.width-x,Math.ceil(rect.w)));
+ const h=Math.max(1,Math.min(canvas.height-y,Math.ceil(rect.h)));
+ const pad=20,scale=Math.max(2,Math.min(4,750/w));
+ out.width=Math.round(w*scale)+pad*2;out.height=Math.round(h*scale)+pad*2;
+ const ctx=out.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
+ ctx.drawImage(canvas,x,y,w,h,pad,pad,out.width-pad*2,out.height-pad*2);
+ return out;
+}
+function showCanvas(parent,title,canvas){
+ const wrap=document.createElement('div'),heading=document.createElement('h4');heading.textContent=title;wrap.append(heading,canvas);parent.append(wrap);
+}
+async function analyze(file,expected,i,worker){
+ const section=document.createElement('section'),title=document.createElement('h2');
+ title.textContent=(i+1)+'. '+file.name;section.append(title);results.append(section);
+ const bmp=await createImageBitmap(file),base=document.createElement('canvas');
+ // Scale consistently, but never use hue or red-ink thresholds.
+ const factor=Math.min(1,1800/bmp.width);
+ base.width=Math.round(bmp.width*factor);base.height=Math.round(bmp.height*factor);
+ base.getContext('2d').drawImage(bmp,0,0,base.width,base.height);bmp.close();
+ const top=document.createElement('canvas');top.width=base.width;top.height=Math.round(base.height*.39);
+ top.getContext('2d').drawImage(base,0,0,top.width,top.height,0,0,top.width,top.height);
+ await worker.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
+ const whole=await worker.recognize(top,{}, {blocks:true});
+ const data=whole.data||{},words=gatherWords(data);
+ const found=lineSerial(data.text);
+ const near=boxForHeader(words,top.width,top.height);
+ const rects=[];
+ if(near)rects.push(near);
+ // Diagnostic fallback windows: anchored to upper-right *header area*.
+ // Never silently accept a match merely because the expected number exists.
+ rects.push({x:base.width*.62,y:base.height*.095,w:base.width*.28,h:base.height*.08,basis:'wide upper header'});
+ rects.push({x:base.width*.65,y:base.height*.16,w:base.width*.28,h:base.height*.07,basis:'lower upper header'});
+ const readings=[];
+ for(const rect of rects){
+  const sample=crop(base,rect);
+  await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
+  const scanned=await worker.recognize(sample);
+  const raw=String(scanned.data?.text||'').trim();
+  const value=digits(raw);
+  readings.push({name:rect.basis,raw,value});
+  showCanvas(section,'Crop: '+rect.basis+' — '+(value||'[unreadable]'),sample);
+ }
+ const readingsDistinct=[...new Set([found,...readings.map(x=>x.value)].filter(Boolean))];
+ const result=document.createElement('p');
+ const confident=(found&&readingsDistinct.length===1)||(readings.filter(x=>x.value).length>=2&&readingsDistinct.length===1);
+ result.textContent='Header text: '+(found||'[unreadable]')+' | Crop results: '+readings.map(x=>x.value||'?').join(', ')+
+   ' | '+(confident?'Consistent reading: '+readingsDistinct[0]:'Needs review (no automatic match)');
+ if(expected){
+  result.textContent+=' | Expected: '+expected;
+  result.className=confident&&norm(readingsDistinct[0])===norm(expected)?'good':'bad';
+ }section.insertBefore(result,section.children[1]);
+ const raw=document.createElement('details');raw.innerHTML='<summary>View raw header OCR and coordinates</summary>';
+ const pre=document.createElement('pre');pre.textContent=JSON.stringify({header:data.text,recognized:readingsDistinct,readings,expected,confident},null,2);
+ raw.append(pre);section.append(raw);
+ base.width=0;base.height=0;
+}
+$('run').onclick=async()=>{
+ const files=[...$('photos').files],expected=$('expected').value.split(',').map(x=>x.trim());
+ if(!files.length){$('status').textContent='Select a photo first.';return}
+ if(!window.Tesseract){$('status').textContent='OCR library failed to load. Check your connection.';return}
+ $('run').disabled=true;results.replaceChildren();let worker;
+ try{
+  worker=await Tesseract.createWorker('eng');
+  for(let i=0;i<files.length;i++){
+   $('status').textContent='Examining '+(i+1)+' of '+files.length+'; please wait.';
+   try{await analyze(files[i],expected[i]||'',i,worker)}
+   catch(err){const item=document.createElement('section');item.textContent=files[i].name+': '+err.message;results.append(item)}
+  }
+  $('status').textContent='Offline OCR diagnostics finished. No image was uploaded or saved.';
+ }catch(err){$('status').textContent='OCR startup failed: '+err.message}
+ finally{if(worker)await worker.terminate();$('run').disabled=false}
+};
+</script></body></html>
