@@ -52,7 +52,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 'use strict';
 const URL='https://sjfhlaclgmkwwofzstok.supabase.co', KEY='sb_publishable_w762jR65CWwlO30fKQsYOw_6L9grx8S',SESSION='BB_SUPABASE_DEV_SESSION_V1',BUCKET='bb-real-invoices';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorRect=null,editorStart=null,cameraStream=null,cameraFrameId=0,cameraFocusBusy=false;
+let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorRect=null,editorStart=null,cameraStream=null,cameraFrameId=0,cameraFocusBusy=false,cameraLastDraw=0,cameraStarting=false;
 
 const clean=v=>String(v??'').trim();
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
@@ -97,12 +97,17 @@ function cameraGeometry(){
  const scale=Math.max(cw/vw,ch/vh),cropW=cw/scale,cropH=ch/scale;
  return {vw,vh,cw,ch,cropW,cropH,left:(vw-cropW)/2,top:(vh-cropH)/2};
 }
-function renderCamera(){
+function renderCamera(timestamp=0){
  if(!cameraStream||$('cameraPanel').hidden)return;
- const video=$('cameraVideo'),canvas=$('cameraCanvas');
- const g=cameraGeometry();
- if(video.readyState>=2&&g){
-  canvas.getContext('2d').drawImage(video,g.left,g.top,g.cropW,g.cropH,0,0,g.cw,g.ch);
+ // A 24 FPS portrait preview is smoother on mid-range phones than drawing
+ // every display refresh. Capture still comes directly from the video track.
+ if(timestamp-cameraLastDraw>=1000/24||!cameraLastDraw){
+  const video=$('cameraVideo'),canvas=$('cameraCanvas');
+  const g=cameraGeometry();
+  if(video.readyState>=2&&g){
+   canvas.getContext('2d').drawImage(video,g.left,g.top,g.cropW,g.cropH,0,0,g.cw,g.ch);
+   cameraLastDraw=timestamp||performance.now();
+  }
  }
  cameraFrameId=requestAnimationFrame(renderCamera);
 }
@@ -153,36 +158,41 @@ $('cameraCanvas').addEventListener('pointerup',e=>{
 $('cameraFocus').onclick=()=>void focusCamera();
 function stopCamera(){
  if(cameraFrameId){cancelAnimationFrame(cameraFrameId);cameraFrameId=0}
+ cameraLastDraw=0;
  if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null}
  $('cameraPanel').hidden=true;$('cameraVideo').srcObject=null;
  $('focusRing').hidden=true;
 }
 async function startCamera(){
+ if(cameraStarting||cameraStream)return;
  $('uploadMessage').textContent='';
  if(!navigator.mediaDevices?.getUserMedia){$('camera').click();return}
+ cameraStarting=true;
+ $('takePhotoButton').disabled=true;
+ $('cameraPanel').hidden=false;
+ cameraStatus('Opening rear camera…');
  try{
-  // Favor the best browser-exposed rear camera resolution; the browser
-  // negotiates actual settings. Capture uses the real track resolution.
-  cameraStream=await navigator.mediaDevices.getUserMedia({
-   video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}},audio:false});
-  let track=cameraTrack();
-  const cap=cameraCapabilities();
-  if(cap.width?.max&&cap.height?.max){
-   try{
-    await track.applyConstraints({width:{ideal:Math.min(cap.width.max,4032)},height:{ideal:Math.min(cap.height.max,3024)}});
-   }catch(error){console.info('Camera keeps negotiated resolution',error)}
-  }
-  $('cameraVideo').srcObject=cameraStream;
-  $('cameraPanel').hidden=false;
+  // One negotiated stream only: avoid the slow second high-resolution
+  // renegotiation that used to occur before the preview could appear.
+  // 2560x1440 is a practical browser capture target; actual resolution
+  // depends on the phone, and the capture keeps the full native track pixels.
+  const stream=await navigator.mediaDevices.getUserMedia({
+   video:{facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1440}},audio:false});
+  cameraStream=stream;
+  $('cameraVideo').srcObject=stream;
   await $('cameraVideo').play();
-  const settings=track.getSettings?.()||{};
-  cameraStatus('Camera '+(settings.width||$('cameraVideo').videoWidth)+' × '+(settings.height||$('cameraVideo').videoHeight)+' • Tap the printed number to focus.');
+  cameraLastDraw=0;
   renderCamera();
-  if((cap.focusMode||[]).includes('continuous')){
-   try{await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch{}
-  }
+  const track=cameraTrack(),settings=track?.getSettings?.()||{};
+  cameraStatus('Camera '+(settings.width||$('cameraVideo').videoWidth)+' × '+(settings.height||$('cameraVideo').videoHeight)+' • Tap the printed number to focus.');
+  // Autofocus remains the browser default. Only request a different focus
+  // mode after the staff explicitly taps or presses Refocus.
  }catch(e){
-  stopCamera();$('uploadMessage').textContent='Live camera unavailable. Use your device camera instead.';$('camera').click();
+  stopCamera();
+  $('uploadMessage').textContent='Live camera unavailable. Use your device camera instead.';
+  $('camera').click();
+ }finally{
+  cameraStarting=false;$('takePhotoButton').disabled=false;
  }
 }
 $('cameraClose').onclick=stopCamera;
