@@ -94,10 +94,10 @@ $('pasteZone').onclick=()=>$('pasteZone').focus();
 // never modified; normalized output joins the laboratory test queue only.
 // Fixed-frame editor: photo moves beneath the unchanging standard invoice
 // frame. Image is local, and corrected copies enter the lab queue only.
-let shapeBitmap=null,shapeScale=1,shapeX=0,shapeY=0,shapeDegrees=0,shapeDrag=null;
+let shapeBitmap=null,shapeScale=1,shapeX=0,shapeY=0,shapeDegrees=0,shapeQuarterBase=0,shapeDrag=null;
 const shapeCanvas=$('shapeCanvas'),shapeOutput=$('shapeOutput');
 const SW=640,SH=840;
-const FRAME={x:89,y:24,w:462,h:792}; // fixed portrait frame, ~0.583 ratio
+const FRAME={x:65,y:61,w:510,h:718}; // fixed 0.71 portrait, matches output canvas
 function clamp(v,a,b){return Math.min(b,Math.max(a,v))}
 function shapePosition(e){
  const r=shapeCanvas.getBoundingClientRect();
@@ -149,7 +149,7 @@ function shapeFit(){
  if(!shapeBitmap)return;
  // Fit the entire invoice/photo inside the fixed frame initially.
  const base=Math.min(FRAME.w/shapeBitmap.width,FRAME.h/shapeBitmap.height);
- shapeScale=base;shapeX=0;shapeY=0;shapeDegrees=0;
+ shapeScale=base;shapeX=0;shapeY=0;shapeDegrees=0;shapeQuarterBase=0;
  $('shapeZoom').value=100;$('shapeRotate').value=0;
  shapeDraw();
 }
@@ -185,7 +185,7 @@ $('shapeZoom').oninput=()=>{
  shapeScale=base*Number($('shapeZoom').value)/100;
  shapeDraw();
 };
-$('shapeRotate').oninput=()=>{shapeDegrees=Number($('shapeRotate').value);shapeDraw()};
+$('shapeRotate').oninput=()=>{shapeDegrees=shapeQuarterBase+Number($('shapeRotate').value);shapeDraw()};
 function shapeZoomStep(step){
  $('shapeZoom').value=clamp(Number($('shapeZoom').value)+step,60,300);
  $('shapeZoom').dispatchEvent(new Event('input'));
@@ -196,7 +196,7 @@ function shapeQuarter(degrees){
  if(!shapeBitmap)return;
  // Quarter-turn changes the underlying rotation, while the fine slider
  // continues to represent only the +/- 30 degree adjustment.
- shapeDegrees+=degrees;shapeDraw();
+ shapeQuarterBase+=degrees;shapeDegrees=shapeQuarterBase+Number($('shapeRotate').value);shapeDraw();
 }
 $('shapeTurnLeft').onclick=()=>shapeQuarter(-90);
 $('shapeTurnRight').onclick=()=>shapeQuarter(90);
