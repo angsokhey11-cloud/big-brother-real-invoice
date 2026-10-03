@@ -448,41 +448,67 @@ async function analyze(file,expected,i,worker){
 
 async function analyzeLatestFramed(file,expected,worker){
  const section=document.createElement('section');results.append(section);
- const heading=document.createElement('h2');heading.textContent='Framed invoice: '+file.name;section.append(heading);
- const bitmap=await createImageBitmap(file);
- const base=document.createElement('canvas');
+ const title=document.createElement('h2');title.textContent='Framed invoice: '+file.name;section.append(title);
+ const bitmap=await createImageBitmap(file),base=document.createElement('canvas');
  base.width=bitmap.width;base.height=bitmap.height;
- base.getContext('2d').drawImage(bitmap,0,0);
- bitmap.close();
- // Read exactly the fixed green target, never the original photograph.
- const rect={x:base.width*.665,y:base.height*.075,w:base.width*.275,h:base.height*.079};
- const sample=crop(base,rect);
- showCanvas(section,'Only the fixed number crop is scanned',sample);
- const data=[];
- for(const mode of [{id:'word',psm:'8',whitelist:''},{id:'line',psm:'7',whitelist:'0123456789'}]){
-  await worker.setParameters({tessedit_pageseg_mode:mode.psm,tessedit_char_whitelist:mode.whitelist});
-  const o=await worker.recognize(sample);
-  const raw=String(o.data?.text||'').trim(),value=digits(raw);
-  data.push({mode:mode.id,raw,value,confidence:Math.round(o.data?.confidence||0)});
+ base.getContext('2d').drawImage(bitmap,0,0);bitmap.close();
+ const target={x:.665,y:.075,w:.275,h:.079};
+ // The green guide intentionally gives staff positioning tolerance. Actual
+ // OCR should operate on a smaller strip inside it, above the dotted rule.
+ const candidates=[
+  {name:'Tight number-only strip',box:{x:.08,y:.49,w:.84,h:.42}},
+  {name:'Slightly higher strip',box:{x:.08,y:.40,w:.84,h:.46}}
+ ];
+ const targetCanvas=document.createElement('canvas');
+ targetCanvas.width=Math.round(target.w*base.width);
+ targetCanvas.height=Math.round(target.h*base.height);
+ targetCanvas.getContext('2d').drawImage(base,
+  target.x*base.width,target.y*base.height,target.w*base.width,target.h*base.height,
+  0,0,targetCanvas.width,targetCanvas.height);
+ const readings=[];
+ for(const cand of candidates){
+  const box=cand.box;
+  const rawCrop=document.createElement('canvas');
+  rawCrop.width=Math.round(targetCanvas.width*box.w);
+  rawCrop.height=Math.round(targetCanvas.height*box.h);
+  rawCrop.getContext('2d').drawImage(targetCanvas,
+   targetCanvas.width*box.x,targetCanvas.height*box.y,rawCrop.width,rawCrop.height,
+   0,0,rawCrop.width,rawCrop.height);
+  const padded=document.createElement('canvas'),scale=3,pad=26;
+  padded.width=rawCrop.width*scale+pad*2;padded.height=rawCrop.height*scale+pad*2;
+  const p=padded.getContext('2d');p.fillStyle='#fff';p.fillRect(0,0,padded.width,padded.height);
+  p.drawImage(rawCrop,pad,pad,rawCrop.width*scale,rawCrop.height*scale);
+  const readingsHere=[];
+  for(const mode of [{id:'word',psm:'8',whitelist:''},{id:'digit-line',psm:'7',whitelist:'0123456789'}]){
+   await worker.setParameters({tessedit_pageseg_mode:mode.psm,tessedit_char_whitelist:mode.whitelist});
+   const o=await worker.recognize(padded);
+   readingsHere.push({mode:mode.id,raw:String(o.data?.text||'').trim(),
+    confidence:Math.round(o.data?.confidence||0)});
+  }
+  const vals=[...new Set(readingsHere.map(x=>digits(x.raw)).filter(Boolean))];
+  const value=vals.length===1?vals[0]:'';
+  readings.push({crop:cand.name,modes:readingsHere,value,conflict:vals.length>1});
+  if(value){
+   showCanvas(section,'Cleaned number crop: '+cand.name,padded);
+   break;
+  }
+  if(readings.length===candidates.length)showCanvas(section,'Last number crop tested',padded);
  }
- const distinct=[...new Set(data.map(x=>x.value).filter(Boolean))];
+ const found=[...new Set(readings.map(x=>x.value).filter(Boolean))];
+ const read=found.length===1?found[0]:'',conflict=readings.some(x=>x.conflict)||found.length>1;
  const result=document.createElement('p');result.style.fontSize='18px';result.style.fontWeight='700';
- const read=distinct.length===1?distinct[0]:'';
- const conflict=distinct.length>1;
- result.textContent=conflict?'Two OCR modes disagree — review required':
-   read?'OCR reads: '+read+' (provisional)': 'OCR could not read six digits';
+ result.textContent=conflict?'Conflicting OCR readings — review required':
+  read?'Number read: '+read+' (provisional)':'Number not recognized — adjust photo under green target';
  if(expected){
   result.textContent+=' | Expected: '+expected;
-  result.textContent+=read&&norm(read)===norm(expected)?
-   ' | Candidate matches; not an automatic attachment.':' | Review required.';
+  if(!conflict&&read&&norm(read)===norm(expected))result.textContent+=' | Candidate matches; verify paper before attachment.';
+  else result.textContent+=' | Review required.';
  }
- result.className=read&&(!expected||norm(read)===norm(expected))?'good':'bad';
+ result.className=read&&!conflict&&(!expected||norm(read)===norm(expected))?'good':'bad';
  section.insertBefore(result,section.children[1]);
- const more=document.createElement('details');
- const summary=document.createElement('summary');summary.textContent='Show detailed OCR diagnostics';
- const raw=document.createElement('pre');
- raw.textContent=JSON.stringify({read,expected,conflict,modes:data,source:'framed corrected copy'},null,2);
- more.append(summary,raw);section.append(more);
+ const more=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');
+ summary.textContent='Show OCR raw readings';pre.textContent=JSON.stringify({read,expected,conflict,readings},null,2);
+ more.append(summary,pre);section.append(more);
  base.width=0;base.height=0;
 }
 $('run').onclick=async()=>{
