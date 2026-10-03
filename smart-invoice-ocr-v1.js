@@ -226,13 +226,35 @@ async function verify(file,expected,options={}){
  if(!normalizedExpected)return {status:'unclear',message:'System invoice number is missing.',scanned:'',candidates:[]};
  try{
   await script();
-  // The main image is still retained for storage. Only OCR uses this crop.
-  // A labelled number or a single standalone number in the header is primary.
+  // The automatic scan uses the SAME number-only OCR as the manually
+  // selected default box, rather than a separate permissive header reader.
+  // Different invoice layouts can still use manually adjusted selections.
   if(!options.numberOnly){
    try{
-    const header=await scanHeader(file,normalizedExpected);
-    if(header)return header;
-   }catch(error){console.warn('Header OCR fallback:',error)}
+    const bitmap=await createImageBitmap(file);
+    let crop;
+    try{
+     const x=Math.round(bitmap.width*.70),y=Math.round(bitmap.height*.025);
+     const w=Math.max(1,Math.min(bitmap.width-x,Math.round(bitmap.width*.23)));
+     const h=Math.max(1,Math.min(bitmap.height-y,Math.round(bitmap.height*.075)));
+     crop=document.createElement('canvas');
+     crop.width=w*2;crop.height=h*2;
+     const ctx=crop.getContext('2d');
+     ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+     ctx.drawImage(bitmap,x,y,w,h,0,0,crop.width,crop.height);
+    }finally{bitmap.close()}
+    const blob=await new Promise(resolve=>crop.toBlob(resolve,'image/png'));
+    if(!blob)throw Error('Could not prepare the automatic number crop');
+    const result=await scanSelectedDigits(new File([blob],'auto-invoice-number.png',{type:'image/png'}),normalizedExpected);
+    if(result.status==='match')
+     return {...result,message:'Automatic number-area scan verified. '+result.message};
+    return {...result,status:'unclear',
+     message:'Automatic number-area scan was inconclusive. Open Select & Scan Number Area to adjust the box. '+result.message};
+   }catch(error){
+    console.warn('Automatic number crop:',error);
+    return {status:'unclear',scanned:'',candidates:[],
+     message:'Automatic number scan unavailable. Select & Scan Number Area or request administrator review.'};
+   }
   }
   if(options.numberOnly){
    try{return await scanSelectedDigits(file,normalizedExpected)}
