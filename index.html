@@ -13,6 +13,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid #d7e4ef}.invoice-viewer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invoice-viewer-body{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;background:#eaf0f7}
 .invoice-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}.invoice-viewer-body iframe{display:block;width:100%;height:100%;border:0;background:white}.invoice-viewer-body .hint{padding:15px}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
+.photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:100%;height:auto;max-height:55dvh;touch-action:none;background:#eaf0f6;cursor:crosshair}.photo-editor p{font-size:12px;color:#5e7690}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel video{width:100%;max-width:680px;height:min(72dvh,650px);object-fit:contain}.camera-stage{position:relative;width:100%;max-width:680px;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}.camera-stage video{height:100%;object-fit:contain}.camera-guide{position:absolute;border:3px solid #ffbb42;aspect-ratio:.71;width:min(76%,48vh);max-height:88%;border-radius:8px;box-shadow:0 0 0 200vmax #07111a55;pointer-events:none}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
 </style></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
@@ -34,22 +35,25 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div id="pasteTarget" contenteditable="true" tabindex="0" role="textbox" aria-label="Paste clipboard invoice image here" class="paste-target">Tap here, then paste your invoice image</div>
 </div>
 </div>
-<p class="hint">Images from screenshots or copied photos. Up to 12 MB. Number verification assists checking, but identical invoice numbers can belong to different customers—always confirm the customer too.</p>
-<div id="preview" class="hint">No file selected</div><div id="verification" class="verify" hidden></div>
-<div class="crop-tools"><button type="button" class="alt" id="cropStart" hidden>🔍 Select & Scan Number Area</button></div>
-<div id="cropPanel" class="crop-panel" hidden><p>Start with the printed number beside Inv. No. at the upper right. Move or resize the box around the digits if the picture is tilted or unclear. The original full photo is uploaded.</p><canvas id="cropCanvas" aria-label="Select invoice number area" width="600" height="400"></canvas>
-<div class="buttons"><button type="button" class="alt" id="cropCancel">Cancel</button><button type="button" id="cropVerify" disabled>Scan Selected Area</button></div></div><div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="replace-fields" id="overrideFields" hidden><label for="overrideReason">Administrator override (if OCR cannot confirm or detects a mismatch)</label><textarea id="overrideReason" placeholder="Explain your manual inspection and why this paper invoice matches the customer and invoice number"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Upload Original</button></div>
+<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Up to 12 MB. PDF files remain available without photo cropping.</p>
+<div id="preview" class="hint">No photo selected</div>
+<div class="crop-tools"><button type="button" id="editPhoto" class="alt" hidden>✂ Edit / Crop Picture</button><button type="button" id="restorePhoto" class="alt" hidden>Restore selected photo</button></div>
+<div id="photoEditor" class="photo-editor" hidden><p>Draw a rectangle around the invoice paper to remove unnecessary background. Click Apply Crop to use the edited copy.</p><canvas id="editCanvas" aria-label="Drag to crop the invoice paper"></canvas>
+<div class="buttons"><button type="button" class="alt" id="editCancel">Cancel</button><button type="button" id="editApply" disabled>Apply Crop</button></div></div>
+<div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
  <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong><button type="button" class="alt" id="invoiceViewerClose">✕ Close</button></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
-<script src="smart-invoice-ocr-v1.js?v=20261003-label-layout1"></script>
+<div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage"><video id="cameraVideo" autoplay playsinline muted></video><div class="camera-guide"></div></div><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
+<div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
 <script>
 (()=>{
 'use strict';
 const URL='https://sjfhlaclgmkwwofzstok.supabase.co', KEY='sb_publishable_w762jR65CWwlO30fKQsYOw_6L9grx8S',SESSION='BB_SUPABASE_DEV_SESSION_V1',BUCKET='bb-real-invoices';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='pending',rows=[],selected=null,chosen=null,busy=false,previewUrl='',ocr=null,ocrSerial=0,replacing=false,adminOverride=false,manageable=new Set(),cropBitmap=null,cropRect=null,cropStart=null;
+let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorRect=null,editorStart=null,cameraStream=null;
+
 const clean=v=>String(v??'').trim();
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
 async function token(){let s=readSession();if(!s?.access_token)throw Error('Please sign in through the BIG BROTHER Dashboard.');if(s.expires_at&&s.expires_at<Math.floor(Date.now()/1000)+45){let r=await fetch(URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});const v=await r.json();if(!r.ok)throw Error(v.msg||v.message||'Session expired');v.expires_at=Math.floor(Date.now()/1000)+v.expires_in;localStorage.setItem(SESSION,JSON.stringify(v));s=v}return s.access_token}
@@ -76,94 +80,119 @@ document.querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>void showHi
 async function load(){if(busy)return;notice('');$('items').textContent='Loading invoices…';try{rows=await rpc('bb_real_invoice_list',{p_mode:mode});if(!Array.isArray(rows))rows=[];manageable=new Set();if(mode==='uploaded'){try{manageable=new Set(await rpc('bb_real_invoice_manageable',{p_invoice_ids:rows.map(r=>r.invoiceId)})||[])}catch(error){console.warn('Replacement access:',error)}}fillLocations();render()}catch(e){$('items').textContent='';notice(e.message)}}
 $('chooseFileButton').onclick=()=>$('file').click();
 $('takePhotoButton').onclick=()=>$('camera').click();
-function verificationUI(){
- const el=$('verification');
- if(!chosen){el.hidden=true;$('save').disabled=true;return}
- el.hidden=false;el.className='verify '+(ocr?.status==='match'?'good':ocr?.status==='mismatch'?'bad':'wait');
- el.textContent=ocr?.message||'Reading paper invoice number…';
- $('overrideFields').hidden=!adminOverride||ocr?.status==='match';
- $('save').disabled=busy||(!ocr||ocr.status!=='match'&&(!adminOverride||$('overrideReason').value.trim().length<8))||(replacing&&$('replaceReason').value.trim().length<8);
+function updateComplete(){
+ $('save').disabled=busy||!chosen||(replacing&&$('replaceReason').value.trim().length<8);
 }
-async function scan(){
- const serial=++ocrSerial,file=chosen,expected=selected?.invoiceNo;
- if(!file||!expected)return;
- ocr=null;verificationUI();
- const result=await(window.BBInvoiceOCR?.verify(file,expected)||Promise.resolve({status:'unclear',message:'OCR module did not load.'}));
- if(serial!==ocrSerial||file!==chosen)return;
- ocr=result;verificationUI();
+function normalizedInvoice(v){
+ const text=String(v||'').trim();
+ if(!/^[0-9]{1,10}$/.test(text))return null;
+ return text.replace(/^0+/,'')||'0';
 }
-function drawCrop(){
- const canvas=$('cropCanvas'),ctx=canvas.getContext('2d');
- if(!cropBitmap)return;
- ctx.clearRect(0,0,canvas.width,canvas.height);
- ctx.drawImage(cropBitmap,0,0,canvas.width,canvas.height);
- if(cropRect){
-  const {x,y,w,h}=cropRect;
-  ctx.fillStyle='rgba(17,107,201,.13)';ctx.fillRect(x,y,w,h);
-  ctx.strokeStyle='#106ac2';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);
+function stopCamera(){
+ if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null}
+ $('cameraPanel').hidden=true;$('cameraVideo').srcObject=null;
+}
+async function startCamera(){
+ $('uploadMessage').textContent='';
+ if(!navigator.mediaDevices?.getUserMedia){$('camera').click();return}
+ try{
+  cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:2560}},audio:false});
+  $('cameraVideo').srcObject=cameraStream;
+  $('cameraPanel').hidden=false;await $('cameraVideo').play();
+ }catch(e){stopCamera();$('uploadMessage').textContent='Live camera unavailable. Use Take Photo with the device camera instead.';$('camera').click()}
+}
+$('cameraClose').onclick=stopCamera;
+$('cameraCapture').onclick=()=>{
+ const video=$('cameraVideo');if(!video.videoWidth)return;
+ const out=document.createElement('canvas');out.width=video.videoWidth;out.height=video.videoHeight;
+ out.getContext('2d').drawImage(video,0,0);
+ out.toBlob(blob=>{
+  stopCamera();
+  if(blob)setFile(new File([blob],'camera-invoice.jpg',{type:'image/jpeg'}));
+ },'image/jpeg',.94);
+};
+function editorDraw(){
+ if(!editorBitmap)return;
+ const can=$('editCanvas'),ctx=can.getContext('2d');
+ ctx.clearRect(0,0,can.width,can.height);ctx.drawImage(editorBitmap,0,0,can.width,can.height);
+ if(editorRect){
+  ctx.fillStyle='rgba(10,91,178,.12)';ctx.fillRect(editorRect.x,editorRect.y,editorRect.w,editorRect.h);
+  ctx.strokeStyle='#0476dd';ctx.lineWidth=Math.max(2,can.width/350);
+  ctx.strokeRect(editorRect.x,editorRect.y,editorRect.w,editorRect.h);
  }
- $('cropVerify').disabled=!cropRect||cropRect.w<12||cropRect.h<12;
+ $('editApply').disabled=!editorRect||editorRect.w<24||editorRect.h<24;
 }
-function point(e){
- const canvas=$('cropCanvas'),r=canvas.getBoundingClientRect();
- return {x:Math.min(canvas.width,Math.max(0,(e.clientX-r.left)*canvas.width/r.width)),
- y:Math.min(canvas.height,Math.max(0,(e.clientY-r.top)*canvas.height/r.height))};
+function editPoint(e){
+ const can=$('editCanvas'),r=can.getBoundingClientRect();
+ const scale=Math.min(r.width/can.width,r.height/can.height);
+ const ox=r.left+(r.width-can.width*scale)/2,oy=r.top+(r.height-can.height*scale)/2;
+ return {x:Math.max(0,Math.min(can.width,(e.clientX-ox)/scale)),
+  y:Math.max(0,Math.min(can.height,(e.clientY-oy)/scale))};
 }
-async function openCrop(){
- if(!chosen||!chosen.type.startsWith('image/'))return;
- $('cropPanel').hidden=false;cropRect=null;
- if(cropBitmap)cropBitmap.close();
+$('editCanvas').addEventListener('pointerdown',e=>{if(!editorBitmap)return;const can=$('editCanvas');can.setPointerCapture(e.pointerId);editorStart=editPoint(e);editorRect=null;editorDraw()});
+$('editCanvas').addEventListener('pointermove',e=>{
+ if(!editorStart)return;const p=editPoint(e);
+ editorRect={x:Math.min(editorStart.x,p.x),y:Math.min(editorStart.y,p.y),
+  w:Math.abs(editorStart.x-p.x),h:Math.abs(editorStart.y-p.y)};editorDraw();
+});
+for(const t of ['pointerup','pointercancel'])$('editCanvas').addEventListener(t,()=>{editorStart=null;editorDraw()});
+$('editPhoto').onclick=async()=>{
+ if(!sourcePhoto?.type.startsWith('image/'))return;
  try{
-  cropBitmap=await createImageBitmap(chosen);
-  if($('cropPanel').hidden)return;
-  const canvas=$('cropCanvas'),scale=Math.min(1,850/cropBitmap.width);
-  canvas.width=Math.round(cropBitmap.width*scale);canvas.height=Math.round(cropBitmap.height*scale);
-  // Same adjustable default serial selection as Invoice Generator.
-  cropRect={x:canvas.width*.70,y:canvas.height*.095,w:canvas.width*.25,h:canvas.height*.065};
-  drawCrop();
- }catch(e){$('uploadMessage').textContent='Could not open image for cropping: '+e.message;$('cropPanel').hidden=true}
+  if(editorBitmap)editorBitmap.close();
+  editorBitmap=await createImageBitmap(sourcePhoto);
+  const can=$('editCanvas'),scale=Math.min(1,1000/editorBitmap.width);
+  can.width=Math.round(editorBitmap.width*scale);can.height=Math.round(editorBitmap.height*scale);
+  editorRect=null;$('photoEditor').hidden=false;editorDraw();
+ }catch(e){$('uploadMessage').textContent='Photo editor error: '+e.message}
+};
+$('editCancel').onclick=()=>{$('photoEditor').hidden=true};
+$('editApply').onclick=async()=>{
+ if(!editorBitmap||!editorRect)return;
+ const can=$('editCanvas'),sx=editorBitmap.width/can.width,sy=editorBitmap.height/can.height;
+ const rect=editorRect,out=document.createElement('canvas');
+ out.width=Math.max(1,Math.round(rect.w*sx));out.height=Math.max(1,Math.round(rect.h*sy));
+ out.getContext('2d').drawImage(editorBitmap,rect.x*sx,rect.y*sy,rect.w*sx,rect.h*sy,0,0,out.width,out.height);
+ const blob=await new Promise(resolve=>out.toBlob(resolve,'image/jpeg',.94));
+ if(!blob){$('uploadMessage').textContent='Could not crop the photograph.';return}
+ applyChosen(new File([blob],'cropped-invoice.jpg',{type:'image/jpeg'}));
+ $('photoEditor').hidden=true;$('restorePhoto').hidden=false;
+};
+$('restorePhoto').onclick=()=>{if(sourcePhoto)applyChosen(sourcePhoto);$('restorePhoto').hidden=true};
+function showConfirm(){
+ if(!selected||!chosen||busy)return;
+ updateComplete();if($('save').disabled)return;
+ $('confirmError').textContent='';$('typedInvoice').value='';
+ $('confirmPhoto').replaceChildren();
+ if(chosen.type.startsWith('image/')){
+  const img=document.createElement('img');img.alt='Photo to inspect and confirm';
+  img.src=previewUrl;$('confirmPhoto').append(img);
+ }else $('confirmPhoto').textContent='Selected PDF: '+chosen.name+' — review your paper invoice before continuing.';
+ $('modal').hidden=true;$('confirmModal').hidden=false;$('typedInvoice').focus();
 }
-async function verifyCrop(){
- if(!cropBitmap||!cropRect||!chosen||busy)return;
- const serial=++ocrSerial,source=chosen,btn=$('cropVerify'),{x,y,w,h}=cropRect;
- btn.disabled=true;ocr=null;verificationUI();
- try{
-  const canvas=$('cropCanvas'),ratioX=cropBitmap.width/canvas.width,ratioY=cropBitmap.height/canvas.height;
-  const out=document.createElement('canvas');out.width=Math.max(1,Math.round(w*ratioX*2));out.height=Math.max(1,Math.round(h*ratioY*2));
-  const context=out.getContext('2d');context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';
-  context.drawImage(cropBitmap,x*ratioX,y*ratioY,w*ratioX,h*ratioY,0,0,out.width,out.height);
-  const blob=await new Promise(resolve=>out.toBlob(resolve,'image/png'));
-  if(!blob)throw Error('Could not prepare selected area');
-  const result=await window.BBInvoiceOCR.verify(new File([blob],'invoice-number-area.png',{type:'image/png'}),selected.invoiceNo,{numberOnly:true});
-  if(serial!==ocrSerial||source!==chosen)return;
-  ocr=result;
-  $('cropPanel').hidden=true;
-  verificationUI();
- }catch(e){$('uploadMessage').textContent='Area scan failed: '+e.message}
- finally{btn.disabled=false}
-}
-function wireCrop(){
- const canvas=$('cropCanvas');
- canvas.addEventListener('pointerdown',e=>{if(!cropBitmap)return;canvas.setPointerCapture(e.pointerId);cropStart=point(e);cropRect=null;drawCrop()});
- canvas.addEventListener('pointermove',e=>{if(!cropStart)return;const p=point(e);cropRect={x:Math.min(p.x,cropStart.x),y:Math.min(p.y,cropStart.y),w:Math.abs(p.x-cropStart.x),h:Math.abs(p.y-cropStart.y)};drawCrop()});
- canvas.addEventListener('pointerup',()=>{cropStart=null;drawCrop()});
- canvas.addEventListener('pointercancel',()=>{cropStart=null;drawCrop()});
- $('cropStart').onclick=()=>void openCrop();
- $('cropCancel').onclick=()=>{$('cropPanel').hidden=true};
- $('cropVerify').onclick=()=>void verifyCrop();
-}
-
-function setFile(f){
+$('confirmBack').onclick=()=>{$('confirmModal').hidden=true;$('modal').hidden=false};
+$('typedInvoice').addEventListener('keydown',e=>{if(e.key==='Enter')$('confirmSubmit').click()});
+function applyChosen(f){
+ chosen=f;
+ if(previewUrl)window.URL.revokeObjectURL(previewUrl);
+ previewUrl=f?window.URL.createObjectURL(f):'';
+ $('preview').replaceChildren();
+ if(f?.type.startsWith('image/')){
+  const img=document.createElement('img');img.src=previewUrl;img.alt='Invoice photo preview';
+  $('preview').append(img);
+ }else $('preview').textContent=f?'PDF: '+f.name:'No photo selected';
  $('selectedFileName').textContent=f?'Selected: '+f.name:'No photo selected';
- ocrSerial++;ocr=null;cropRect=null;$('cropPanel').hidden=true;$('cropStart').hidden=!f||!f.type.startsWith('image/');
- if(previewUrl)window.URL.revokeObjectURL(previewUrl);previewUrl='';
- chosen=null;$('save').disabled=true;
- if(!f){$('preview').textContent='No file selected';verificationUI();return}
- if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)){$('uploadMessage').textContent='Only JPG, PNG, WebP or PDF.';verificationUI();return}
- if(f.size>12*1024*1024){$('uploadMessage').textContent='Max size is 12 MB.';verificationUI();return}
- chosen=f;previewUrl=window.URL.createObjectURL(f);
- $('preview').innerHTML=f.type.startsWith('image/')?'<img alt="Selected invoice preview" src="'+esc(previewUrl)+'">':'PDF: '+esc(f.name);
- $('uploadMessage').textContent='';void scan();
+ updateComplete();
+}
+function setFile(f){
+ $('uploadMessage').textContent='';
+ $('photoEditor').hidden=true;$('restorePhoto').hidden=true;
+ if(!f){sourcePhoto=null;applyChosen(null);return}
+ if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)){
+  $('uploadMessage').textContent='Only JPG, PNG, WebP or PDF.';return}
+ if(f.size>12*1024*1024){$('uploadMessage').textContent='Max size is 12 MB.';return}
+ sourcePhoto=f;applyChosen(f);
+ $('editPhoto').hidden=!f.type.startsWith('image/');
 }
 async function showHistory(id){
  try{
@@ -194,18 +223,65 @@ async function pasteFromClipboard(){
   $('pasteTarget').focus();
  }
 }
-function openUpload(r,replace=false){selected=r;replacing=replace;ocr=null;adminOverride=false;$('modalTitle').textContent=replace?'Replace Original Invoice':'Upload Original Invoice';$('save').textContent=replace?'Save Corrected Picture':'Upload Verified Original';$('target').textContent=r.customer+' · '+r.invoiceNo+' · '+r.invoiceDate;$('modal').hidden=false;setFile(null);$('replaceFields').hidden=!replace;$('replaceReason').value='';$('overrideFields').hidden=true;$('overrideReason').value='';void rpc('bb_real_invoice_override_allowed').then(ok=>{if(selected===r){adminOverride=!!ok;verificationUI()}}).catch(()=>{});$('file').value='';$('camera').value='';$('pasteFallback').hidden=true;$('pasteTarget').textContent='Tap here, then paste your invoice image';$('uploadMessage').textContent=''}
-function close(){if(busy)return;$('modal').hidden=true;selected=null;chosen=null;if(previewUrl){window.URL.revokeObjectURL(previewUrl);previewUrl=''}}
-async function upload(){if(!selected||!chosen||busy||!ocr)return;verificationUI();if($('save').disabled)return;busy=true;$('save').disabled=true;$('uploadMessage').textContent='Uploading securely…';
-const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'}[chosen.type],path=selected.invoiceId+'/'+crypto.randomUUID()+'.'+ext;
-try{const t=await token();const r=await fetch(URL+'/storage/v1/object/'+BUCKET+'/'+encodeURIComponent(path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':chosen.type,'x-upsert':'false'},body:chosen});if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(v.message||v.error||'Storage upload failed')}
-try{
- const common={p_invoice_id:selected.invoiceId,p_storage_path:path,p_mime:chosen.type,p_scanned_number:ocr.scanned||'',p_verification_status:ocr.status,p_override_reason:ocr.status==='match'?null:$('overrideReason').value.trim()};
- if(replacing)await rpc('bb_real_invoice_replace_verified',{...common,p_reason:$('replaceReason').value.trim()});
- else await rpc('bb_real_invoice_register_verified',{...common,p_source:'pending_scan'});
- }catch(e){await request('/storage/v1/object/'+BUCKET+'/'+encodeURIComponent(path).replace('%2F','/'),{method:'DELETE'}).catch(()=>{});throw e}
-busy=false;close();await load();notice(replacing?'Original picture replaced. Previous version retained in audit history.':'Verified original securely uploaded. Removed from Pending Scan.');
-}catch(e){$('uploadMessage').textContent=e.message}finally{busy=false;verificationUI()}}
+function openUpload(r,replace=false){
+ selected=r;replacing=replace;stopCamera();
+ $('modalTitle').textContent=replace?'Replace Original Invoice':'Upload Original Invoice';
+ $('save').textContent=replace?'Complete Replacement':'Complete';
+ $('target').textContent=r.customer+' · '+r.invoiceNo+' · '+r.invoiceDate;
+ $('modal').hidden=false;$('confirmModal').hidden=true;
+ setFile(null);$('editPhoto').hidden=true;
+ $('replaceFields').hidden=!replace;$('replaceReason').value='';
+ $('file').value='';$('camera').value='';
+ $('pasteFallback').hidden=true;$('pasteTarget').textContent='Tap here, then paste your invoice image';
+ $('uploadMessage').textContent='';
+}
+function close(){
+ if(busy)return;
+ stopCamera();$('confirmModal').hidden=true;$('modal').hidden=true;
+ selected=null;chosen=null;sourcePhoto=null;
+ if(previewUrl){window.URL.revokeObjectURL(previewUrl);previewUrl=''}
+ if(editorBitmap){editorBitmap.close();editorBitmap=null}
+}
+async function upload(){
+ if(!selected||!chosen||busy)return;
+ const answer=$('typedInvoice').value.trim();
+ if(normalizedInvoice(answer)===null){
+  $('confirmError').textContent='Enter the printed invoice number using digits only.';return;
+ }
+ const expected=String(selected.invoiceNo||'').replace(/^INV[^0-9]*/i,'').replace(/^0+/,'')||'0';
+ if(normalizedInvoice(answer)!==expected){
+  $('confirmError').textContent='Incorrect number. Inspect the photograph again, then retry.';
+  $('typedInvoice').value='';return;
+ }
+ if(replacing&&$('replaceReason').value.trim().length<8){
+  $('confirmModal').hidden=true;$('modal').hidden=false;
+  $('uploadMessage').textContent='Enter a replacement audit reason (at least 8 characters).';return;
+ }
+ busy=true;$('confirmSubmit').disabled=true;$('confirmError').textContent='Uploading securely…';
+ const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf'}[chosen.type];
+ const path=selected.invoiceId+'/'+crypto.randomUUID()+'.'+ext;
+ try{
+  const t=await token();
+  const r=await fetch(URL+'/storage/v1/object/'+BUCKET+'/'+encodeURIComponent(path).replace('%2F','/'),{
+   method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':chosen.type,'x-upsert':'false'},body:chosen});
+  if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(v.message||v.error||'Storage upload failed')}
+  try{
+   if(replacing)await rpc('bb_real_invoice_replace_manual',{p_invoice_id:selected.invoiceId,
+    p_storage_path:path,p_mime:chosen.type,p_reason:$('replaceReason').value.trim(),p_typed_number:answer});
+   else await rpc('bb_real_invoice_register_manual',{p_invoice_id:selected.invoiceId,
+    p_storage_path:path,p_mime:chosen.type,p_typed_number:answer});
+  }catch(e){
+   await request('/storage/v1/object/'+BUCKET+'/'+encodeURIComponent(path).replace('%2F','/'),{method:'DELETE'}).catch(()=>{});
+   throw e;
+  }
+  busy=false;close();await load();
+  notice(replacing?'Picture replaced with staff number confirmation; previous version retained in audit history.':
+   'Picture uploaded after staff invoice-number confirmation. Removed from Pending Scan.');
+ }catch(e){
+  $('confirmError').textContent=e.message;
+  if(/number does not match/i.test(e.message))$('typedInvoice').value='';
+ }finally{busy=false;$('confirmSubmit').disabled=false;updateComplete()}
+}
 let invoiceViewerRequest=0;
 function closeInvoiceViewer(){
  invoiceViewerRequest++;
@@ -234,7 +310,7 @@ async function view(r){
 $('invoiceViewerClose').onclick=closeInvoiceViewer;
 $('invoiceViewer').addEventListener('click',e=>{if(e.target===$('invoiceViewer'))closeInvoiceViewer()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('invoiceViewer').hidden)closeInvoiceViewer()});
-$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('locationFilter').onchange=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('save').onclick=upload;wireCrop();$('overrideReason').oninput=verificationUI;$('replaceReason').oninput=verificationUI;
+$('pendingTab').onclick=()=>chooseMode('pending');$('uploadedTab').onclick=()=>chooseMode('uploaded');$('refresh').onclick=load;$('search').oninput=render;$('locationFilter').onchange=render;$('close').onclick=close;$('cancel').onclick=close;$('file').onchange=e=>setFile(e.target.files?.[0]);$('pasteClipboard').onclick=pasteFromClipboard;$('camera').onchange=e=>setFile(e.target.files?.[0]);$('takePhotoButton').onclick=startCamera;$('save').onclick=showConfirm;$('confirmSubmit').onclick=upload;$('replaceReason').oninput=updateComplete;
 document.addEventListener('paste',e=>{if($('modal').hidden)return;const f=clipboardFiles(e.clipboardData);if(f){e.preventDefault();pastedFile(f)}});void load();
 })();
 </script></body></html>
