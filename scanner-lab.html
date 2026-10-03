@@ -48,8 +48,8 @@ function queueStatus(){
  $('queue').textContent=photos.length+' photo'+(photos.length===1?'':'s')+' ready: '+(photos.map(x=>x.name).join(', ')||'none');
  const sel=$('shapePhoto'),previous=sel.value;
  sel.replaceChildren();
- photos.forEach((file,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=(i+1)+'. '+file.name;sel.append(option)});
- if(previous!==''&&Number(previous)<photos.length)sel.value=previous;
+ photos.forEach((file,i)=>{if(file.name.startsWith('framed-'))return;const option=document.createElement('option');option.value=String(i);option.textContent=(i+1)+'. '+file.name;sel.append(option)});
+ if(previous!==''&&[...sel.options].some(o=>o.value===previous))sel.value=previous;
 }
 function queueClipboard(blob){
  if(!blob||!/^image\/(?:png|jpeg|webp)$/.test(blob.type))return false;
@@ -221,7 +221,7 @@ $('shapeApply').onclick=async()=>{
   const name='framed-'+(source?.name||'invoice').replace(/\.[^.]+$/,'')+'.png';
   pastedPhotos.push(new File([blob],name,{type:'image/png'}));
   queueStatus();
-  $('shapePhoto').value=String(allPhotos().length-1);
+  // Keep editor on original photo; scan button independently chooses the latest framed copy.
   $('shapeMsg').textContent='Framed copy added. Click Scan latest framed photo. Original unchanged.';
  }catch(err){$('shapeMsg').textContent='Cropping failed: '+err.message}
  finally{btn.disabled=false}
