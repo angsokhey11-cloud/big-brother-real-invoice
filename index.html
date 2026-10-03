@@ -38,12 +38,13 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Up to 12 MB. PDF files remain available without photo cropping.</p>
 <div id="preview" class="hint">No photo selected</div>
 <div class="crop-tools"><button type="button" id="editPhoto" class="alt" hidden>✂ Edit / Crop Picture</button><button type="button" id="restorePhoto" class="alt" hidden>Restore selected photo</button></div>
-<div id="photoEditor" class="photo-editor" hidden><p>Move your photo beneath the fixed gold invoice frame. Use zoom and rotate to fit the paper; only the area inside the frame will be saved.</p>
-<canvas id="editCanvas" width="426" height="600" aria-label="Fixed invoice crop frame; drag the photo underneath"></canvas>
+<div id="photoEditor" class="photo-editor" hidden><p>Rotate or move the photo, then select the crop area. The selected box stays visible until you apply the crop or cancel.</p>
+<div class="buttons"><button type="button" class="alt" id="editMove" >✋ Move Photo</button><button type="button" class="alt" id="editSelect" >▱ Select Crop Area</button></div>
+<canvas id="editCanvas" width="426" height="600" aria-label="Drag to select a persistent adjustable crop area, or move the picture"></canvas>
 <label for="editZoom">Zoom <strong id="editZoomLabel">100%</strong></label><input type="range" id="editZoom" min="100" max="350" step="5" value="100">
 <label for="editAngle">Rotate <strong id="editAngleLabel">0°</strong></label><input type="range" id="editAngle" min="0" max="360" step="1" value="0">
 <div class="buttons"><button type="button" class="alt" id="editLeft">↶ 90°</button><button type="button" class="alt" id="editRight">↷ 90°</button><button type="button" class="alt" id="editReset">Reset</button></div>
-<div class="buttons"><button type="button" class="alt" id="editCancel">Cancel</button><button type="button" id="editApply">Apply Crop</button></div></div>
+<div class="buttons"><button type="button" class="alt" id="editCancel">Cancel</button><button type="button" id="editApply" disabled>Confirm Crop</button></div></div>
 <div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
@@ -56,7 +57,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 'use strict';
 const URL='https://sjfhlaclgmkwwofzstok.supabase.co', KEY='sb_publishable_w762jR65CWwlO30fKQsYOw_6L9grx8S',SESSION='BB_SUPABASE_DEV_SESSION_V1',BUCKET='bb-real-invoices';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorTransform={x:0,y:0,zoom:1,angle:0},editorPointer=null,cameraStream=null,cameraFrameId=0,cameraFocusBusy=false,cameraLastDraw=0,cameraStarting=false;
+let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false,previewUrl='',replacing=false,manageable=new Set(),editorBitmap=null,editorTransform={x:0,y:0,zoom:1,angle:0},editorPointer=null,editorCrop=null,editorSelectMode=false,cameraStream=null,cameraFrameId=0,cameraFocusBusy=false,cameraLastDraw=0,cameraStarting=false;
 
 const clean=v=>String(v??'').trim();
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
@@ -224,74 +225,102 @@ $('cameraCapture').onclick=()=>{
   stopCamera();setFile(new File([blob],'camera-invoice.jpg',{type:'image/jpeg'}));
  },'image/jpeg',.93);
 };
-const EDIT={width:426,height:600,frameX:18,frameY:25,frameW:390,frameH:550};
+const EDIT={width:426,height:600};
 function editorBaseScale(){
+ // Constant for all angles: rotation must not automatically jump/zoom.
  if(!editorBitmap)return 1;
- const angle=editorTransform.angle*Math.PI/180;
- const cosine=Math.abs(Math.cos(angle)),sine=Math.abs(Math.sin(angle));
- // Each crop-frame corner, rotated back into the source image, must fit
- // inside its original width/height. Bounding boxes alone fail near 45°.
- const needX=cosine*EDIT.frameW+sine*EDIT.frameH;
- const needY=sine*EDIT.frameW+cosine*EDIT.frameH;
- return Math.max(needX/editorBitmap.width,needY/editorBitmap.height);
+ return Math.min(EDIT.width/editorBitmap.width,EDIT.height/editorBitmap.height)*.93;
 }
-function paintEdited(ctx,factor=1,withGuide=true){
- if(!editorBitmap)return;
- const w=EDIT.width*factor,h=EDIT.height*factor;
- ctx.clearRect(0,0,w,h);ctx.fillStyle='#e9eff7';ctx.fillRect(0,0,w,h);
- const t=editorTransform,scale=editorBaseScale()*t.zoom;
- ctx.save();ctx.translate((EDIT.width/2+t.x)*factor,(EDIT.height/2+t.y)*factor);
- ctx.rotate(t.angle*Math.PI/180);ctx.scale(scale*factor,scale*factor);
- ctx.drawImage(editorBitmap,-editorBitmap.width/2,-editorBitmap.height/2);
- ctx.restore();
- if(!withGuide)return;
- ctx.fillStyle='rgba(3,17,32,.47)';
- ctx.fillRect(0,0,w,EDIT.frameY*factor);
- ctx.fillRect(0,(EDIT.frameY+EDIT.frameH)*factor,w,(EDIT.height-EDIT.frameY-EDIT.frameH)*factor);
- ctx.fillRect(0,EDIT.frameY*factor,EDIT.frameX*factor,EDIT.frameH*factor);
- ctx.fillRect((EDIT.frameX+EDIT.frameW)*factor,EDIT.frameY*factor,
-  (EDIT.width-EDIT.frameX-EDIT.frameW)*factor,EDIT.frameH*factor);
- ctx.strokeStyle='#ffb72b';ctx.lineWidth=3*factor;
- ctx.strokeRect(EDIT.frameX*factor,EDIT.frameY*factor,EDIT.frameW*factor,EDIT.frameH*factor);
+function clampCrop(r){
+ const x=Math.max(0,Math.min(EDIT.width,r.x)),y=Math.max(0,Math.min(EDIT.height,r.y));
+ return {x,y,w:Math.max(0,Math.min(EDIT.width-x,r.w)),h:Math.max(0,Math.min(EDIT.height-y,r.h))};
 }
 function editorDraw(){
  if(!editorBitmap)return;
- paintEdited($('editCanvas').getContext('2d'));
- $('editZoomLabel').textContent=Math.round(editorTransform.zoom*100)+'%';
- $('editAngleLabel').textContent=Math.round(editorTransform.angle)+'°';
+ const canvas=$('editCanvas'),ctx=canvas.getContext('2d'),t=editorTransform;
+ ctx.clearRect(0,0,EDIT.width,EDIT.height);
+ ctx.fillStyle='#e9eff7';ctx.fillRect(0,0,EDIT.width,EDIT.height);
+ ctx.save();
+ ctx.translate(EDIT.width/2+t.x,EDIT.height/2+t.y);
+ ctx.rotate(t.angle*Math.PI/180);
+ const scale=editorBaseScale()*t.zoom;
+ ctx.scale(scale,scale);
+ ctx.drawImage(editorBitmap,-editorBitmap.width/2,-editorBitmap.height/2);
+ ctx.restore();
+ if(editorCrop){
+  const {x,y,w,h}=editorCrop;
+  ctx.fillStyle='rgba(5,20,38,.37)';
+  ctx.fillRect(0,0,EDIT.width,y);
+  ctx.fillRect(0,y,x,h);
+  ctx.fillRect(x+w,y,EDIT.width-x-w,h);
+  ctx.fillRect(0,y+h,EDIT.width,EDIT.height-y-h);
+  ctx.strokeStyle='#ffb72b';ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle='#ffb72b';ctx.fillRect(x+w-11,y+h-11,22,22);
+ }
+ $('editApply').disabled=!editorCrop||editorCrop.w<30||editorCrop.h<30;
+ $('editMove').className=editorSelectMode?'alt':'active';
+ $('editSelect').className=editorSelectMode?'active':'alt';
+ $('editZoomLabel').textContent=Math.round(t.zoom*100)+'%';
+ $('editAngleLabel').textContent=Math.round(t.angle)+'°';
 }
 function editorPoint(e){
  const rect=$('editCanvas').getBoundingClientRect();
- return {x:(e.clientX-rect.left)*EDIT.width/rect.width,
-  y:(e.clientY-rect.top)*EDIT.height/rect.height};
+ return {x:Math.max(0,Math.min(EDIT.width,(e.clientX-rect.left)*EDIT.width/rect.width)),
+  y:Math.max(0,Math.min(EDIT.height,(e.clientY-rect.top)*EDIT.height/rect.height))};
 }
+function cropFromPoints(a,b){
+ return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),
+  w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};
+}
+$('editMove').onclick=()=>{editorSelectMode=false;editorDraw()};
+$('editSelect').onclick=()=>{editorSelectMode=true;editorDraw()};
 $('editCanvas').addEventListener('pointerdown',e=>{
  if(!editorBitmap)return;
- e.preventDefault();$('editCanvas').setPointerCapture(e.pointerId);
- editorPointer={id:e.pointerId,p:editorPoint(e),x:editorTransform.x,y:editorTransform.y};
+ e.preventDefault();
+ $('editCanvas').setPointerCapture(e.pointerId);
+ const p=editorPoint(e),r=editorCrop;
+ const nearHandle=r&&Math.hypot(p.x-(r.x+r.w),p.y-(r.y+r.h))<30;
+ const inside=r&&p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h;
+ const action=editorSelectMode?(nearHandle?'resize':inside?'move-crop':'new-crop'):'move-photo';
+ editorPointer={id:e.pointerId,p,action,original:r?{...r}:null,
+  tx:editorTransform.x,ty:editorTransform.y};
+ if(action==='new-crop')editorCrop={x:p.x,y:p.y,w:0,h:0};
+ editorDraw();
 });
 $('editCanvas').addEventListener('pointermove',e=>{
- if(!editorPointer||editorPointer.id!==e.pointerId)return;
+ const d=editorPointer;
+ if(!d||d.id!==e.pointerId)return;
  e.preventDefault();
- const p=editorPoint(e);editorTransform.x=editorPointer.x+p.x-editorPointer.p.x;
- editorTransform.y=editorPointer.y+p.y-editorPointer.p.y;editorDraw();
+ const p=editorPoint(e),dx=p.x-d.p.x,dy=p.y-d.p.y;
+ if(d.action==='move-photo'){
+  editorTransform.x=d.tx+dx;editorTransform.y=d.ty+dy;
+ }else if(d.action==='new-crop'){
+  editorCrop=cropFromPoints(d.p,p);
+ }else if(d.action==='resize'){
+  const r=d.original;
+  editorCrop=cropFromPoints({x:r.x,y:r.y},p);
+ }else if(d.action==='move-crop'){
+  const r=d.original;
+  editorCrop={...r,x:Math.min(EDIT.width-r.w,Math.max(0,r.x+dx)),
+   y:Math.min(EDIT.height-r.h,Math.max(0,r.y+dy))};
+ }
+ editorDraw();
 });
-for(const t of ['pointerup','pointercancel'])$('editCanvas').addEventListener(t,e=>{
- if(editorPointer?.id===e.pointerId)editorPointer=null;
+for(const name of ['pointerup','pointercancel'])$('editCanvas').addEventListener(name,e=>{
+ if(editorPointer?.id===e.pointerId){editorPointer=null;editorDraw()}
 });
 $('editZoom').oninput=e=>{editorTransform.zoom=Number(e.target.value)/100;editorDraw()};
 $('editAngle').oninput=e=>{editorTransform.angle=Number(e.target.value);editorDraw()};
 function editorRotate(amount){
  editorTransform.angle=(editorTransform.angle+amount+360)%360;
- // Re-center when using quarter-turn buttons, so earlier drag offsets do
- // not carry the picture outside the fixed portrait frame after rotation.
- editorTransform.x=0;editorTransform.y=0;
- $('editAngle').value=String(editorTransform.angle);editorDraw();
+ $('editAngle').value=String(editorTransform.angle);
+ editorDraw();
 }
 $('editLeft').onclick=()=>editorRotate(-90);
 $('editRight').onclick=()=>editorRotate(90);
 function resetEditor(){
  editorTransform={x:0,y:0,zoom:1,angle:0};
+ editorCrop=null;editorSelectMode=true;
  $('editZoom').value='100';$('editAngle').value='0';editorDraw();
 }
 $('editReset').onclick=resetEditor;
@@ -305,30 +334,33 @@ $('editPhoto').onclick=async()=>{
 };
 $('editCancel').onclick=()=>{$('photoEditor').hidden=true;editorPointer=null};
 $('editApply').onclick=async()=>{
- if(!editorBitmap||busy)return;
+ if(!editorBitmap||busy||!editorCrop||editorCrop.w<30||editorCrop.h<30)return;
  $('editApply').disabled=true;
  try{
-  // Render at export resolution, not the small editor display resolution.
-  // The clipping rectangle matches the exact gold guide; guide is not saved.
-  const maxFactor=Math.min(6,3000/EDIT.frameH,2500/EDIT.frameW);
+  const r=editorCrop;
+  // Export the exact currently selected area, retaining the same photo
+  // translation, zoom and rotation that the user saw in the preview.
+  const imageScale=editorBaseScale()*editorTransform.zoom;
+  const factor=Math.min(6,3000/r.h,3000/r.w,
+   Math.max(1,editorBitmap.width*imageScale/EDIT.width*4));
   const out=document.createElement('canvas');
-  out.width=Math.round(EDIT.frameW*maxFactor);
-  out.height=Math.round(EDIT.frameH*maxFactor);
+  out.width=Math.max(1,Math.round(r.w*factor));
+  out.height=Math.max(1,Math.round(r.h*factor));
   const ctx=out.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
-  const scale=editorBaseScale()*editorTransform.zoom*maxFactor;
-  ctx.translate((EDIT.width/2+editorTransform.x-EDIT.frameX)*maxFactor,
-   (EDIT.height/2+editorTransform.y-EDIT.frameY)*maxFactor);
+  ctx.translate((EDIT.width/2+editorTransform.x-r.x)*factor,
+    (EDIT.height/2+editorTransform.y-r.y)*factor);
   ctx.rotate(editorTransform.angle*Math.PI/180);
-  ctx.scale(scale,scale);
+  ctx.scale(imageScale*factor,imageScale*factor);
   ctx.drawImage(editorBitmap,-editorBitmap.width/2,-editorBitmap.height/2);
   const blob=await new Promise(resolve=>out.toBlob(resolve,'image/jpeg',.94));
   if(!blob)throw Error('Could not export cropped invoice.');
-  if(blob.size>12*1024*1024)throw Error('Edited picture exceeds 12 MB. Reduce picture size or use the original.');
+  if(blob.size>12*1024*1024)throw Error('Edited picture exceeds 12 MB.');
   applyChosen(new File([blob],'cropped-invoice.jpg',{type:'image/jpeg'}));
+  // Selection only disappears when the crop is explicitly confirmed.
   $('photoEditor').hidden=true;$('restorePhoto').hidden=false;
  }catch(e){$('uploadMessage').textContent=e.message}
- finally{$('editApply').disabled=false}
+ finally{editorDraw()}
 };
 $('restorePhoto').onclick=()=>{
  if(sourcePhoto)applyChosen(sourcePhoto);
