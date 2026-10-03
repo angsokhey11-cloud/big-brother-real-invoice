@@ -499,6 +499,62 @@ function localBinaryNumber(canvas){
  }
  ctx.putImageData(image,0,0);return out;
 }
+// Experimental fallback only. Segment the grayscale number strip into six
+// tentative cells using vertical ink contrast, then OCR each cell as ONE
+// character. Never auto-confirm a guessed or incomplete digit sequence.
+async function experimentalSixDigits(image,worker){
+ const gray=enhancedNumberCrop(image),ctx=gray.getContext('2d',{willReadFrequently:true});
+ const w=gray.width,h=gray.height,p=ctx.getImageData(0,0,w,h).data;
+ const top=Math.round(h*.13),bottom=Math.round(h*.78);
+ // Compare each pixel to the median of its row: helps with gray paper and
+ // uneven lighting without using red ink or the known expected number.
+ const ink=new Float64Array(w);
+ for(let y=top;y<bottom;y++){
+  let sum=0;for(let x=0;x<w;x++)sum+=p[(y*w+x)*4];
+  const bg=sum/w;
+  for(let x=0;x<w;x++){
+   const v=p[(y*w+x)*4],difference=Math.max(0,bg-v-14);
+   ink[x]+=difference;
+  }
+ }
+ const smooth=new Float64Array(w);
+ const radius=Math.max(2,Math.round(w*.006));
+ for(let x=0;x<w;x++){
+  let sum=0,count=0;
+  for(let k=Math.max(0,x-radius);k<=Math.min(w-1,x+radius);k++){sum+=ink[k];count++}
+  smooth[x]=sum/count;
+ }
+ const peak=Math.max(...smooth),threshold=peak*.17;
+ if(peak<80)return {status:'no clear ink',digits:[],cells:[]};
+ const marked=[];let active=-1;
+ for(let x=0;x<=w;x++){
+  const on=x<w&&smooth[x]>threshold;
+  if(on&&active<0)active=x;
+  if(!on&&active>=0){if(x-active>=Math.max(3,w*.006))marked.push([active,x]);active=-1}
+ }
+ // Connected clusters can include dotted lines. Require exactly six plausible
+ // width clusters; otherwise return diagnostics without inventing a result.
+ const segments=marked.filter(([a,b])=>b-a<w*.24);
+ if(segments.length!==6)return {status:'segmentation inconclusive',clusterCount:segments.length,segments,digits:[],cells:[]};
+ const digitsFound=[],cells=[];
+ for(const [left,right] of segments){
+  const padX=Math.max(2,Math.round((right-left)*.15));
+  const cell=document.createElement('canvas'),width=130,height=170;
+  cell.width=width;cell.height=height;
+  const cx=cell.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,width,height);
+  const sx=Math.max(0,left-padX),ex=Math.min(w,right+padX);
+  cx.drawImage(gray,sx,top,ex-sx,bottom-top,18,14,width-36,height-28);
+  await worker.setParameters({tessedit_pageseg_mode:'10',tessedit_char_whitelist:'0123456789'});
+  const response=await worker.recognize(cell);
+  const raw=String(response.data?.text||'').trim(),match=raw.match(/^[0-9]$/);
+  const confidence=Math.round(response.data?.confidence||0);
+  cells.push({segment:[left,right],raw,confidence});
+  digitsFound.push(match&&confidence>=35?match[0]:'?');
+ }
+ const text=digitsFound.join('');
+ return {status:digitsFound.includes('?')?'incomplete':'experimental complete',
+  digits:digitsFound,cells,experimentalReading:digitsFound.includes('?')?'':text};
+}
 async function analyzeLatestFramed(file,expected,worker){
  const section=document.createElement('section');results.append(section);
  const title=document.createElement('h2');title.textContent='Framed invoice: '+file.name;section.append(title);
@@ -599,11 +655,24 @@ async function analyzeLatestFramed(file,expected,worker){
   }
   if(readings.length===candidates.length)showCanvas(section,'Number crop (unreadable)',padded);
  }
+ // Do not impact the successful six-digit OCR path. Character-by-character
+ // output is diagnostic and is never an automatic confirmation.
+ let individual=null;
+ if(!readings.some(r=>r.value)){
+  const testBox=candidates[0].box;
+  const source=document.createElement('canvas');
+  source.width=Math.round(targetCanvas.width*testBox.w);
+  source.height=Math.round(targetCanvas.height*testBox.h);
+  source.getContext('2d').drawImage(targetCanvas,
+   targetCanvas.width*testBox.x,targetCanvas.height*testBox.y,source.width,source.height,
+   0,0,source.width,source.height);
+  individual=await experimentalSixDigits(source,worker);
+ }
  const found=[...new Set(readings.map(x=>x.value).filter(Boolean))];
  const read=found.length===1?found[0]:'',conflict=readings.some(x=>x.conflict)||found.length>1;
  const result=document.createElement('p');result.style.fontSize='18px';result.style.fontWeight='700';
  result.textContent=conflict?'Conflicting OCR readings — review required':
-  read?'Number read: '+read+' (provisional)':'Number not recognized — adjust photo under green target';
+  read?'Number read: '+read+' (provisional)':'Full-number OCR unreadable — experimental per-digit results in diagnostics';
  if(expected){
   result.textContent+=' | Expected: '+expected;
   if(!conflict&&read&&norm(read)===norm(expected))result.textContent+=' | Candidate matches; verify paper before attachment.';
@@ -612,7 +681,7 @@ async function analyzeLatestFramed(file,expected,worker){
  result.className=read&&!conflict&&(!expected||norm(read)===norm(expected))?'good':'bad';
  section.insertBefore(result,section.children[1]);
  const more=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');
- summary.textContent='Show OCR raw readings';pre.textContent=JSON.stringify({read,expected,conflict,readings},null,2);
+ summary.textContent='Show OCR raw readings';pre.textContent=JSON.stringify({read,expected,conflict,readings,experimentalIndividualDigits:individual},null,2);
  more.append(summary,pre);section.append(more);
  base.width=0;base.height=0;
 }
