@@ -564,6 +564,32 @@ async function analyzeLatestFramed(file,expected,worker){
     }
    }
   }
+  // Difficult serials: keep the existing successful pipeline intact.
+  // Try digits-only SINGLE WORD on grayscale crops and the original crop.
+  // Also try the upper 86% of the image to exclude dotted underline.
+  if(!readingsHere.some(x=>digits(x.raw))){
+   const trimmed=document.createElement('canvas');
+   const trimHeight=Math.floor(padded.height*.86);
+   trimmed.width=padded.width;trimmed.height=trimHeight;
+   const tx=trimmed.getContext('2d');
+   tx.fillStyle='#fff';tx.fillRect(0,0,trimmed.width,trimmed.height);
+   tx.drawImage(padded,0,0,trimmed.width,trimHeight,0,0,trimmed.width,trimHeight);
+   const variants=[
+    {name:'numeric-only original',image:padded},
+    {name:'numeric-only high contrast',image:enhancedNumberCrop(trimmed)},
+    {name:'numeric-only local threshold',image:localBinaryNumber(trimmed)}
+   ];
+   for(const v of variants){
+    for(const [id,psm] of [['digit-word','8'],['digit-raw-line','13']]){
+     await worker.setParameters({tessedit_pageseg_mode:psm,tessedit_char_whitelist:'0123456789',
+      preserve_interword_spaces:'0'});
+     const o=await worker.recognize(v.image);
+     readingsHere.push({variant:v.name,mode:id,raw:String(o.data?.text||'').trim(),
+      confidence:Math.round(o.data?.confidence||0)});
+    }
+    if(readingsHere.some(x=>digits(x.raw)))break;
+   }
+  }
   const vals=[...new Set(readingsHere.map(x=>digits(x.raw)).filter(Boolean))];
   const value=vals.length===1?vals[0]:'';
   readings.push({crop:cand.name,modes:readingsHere,value,conflict:vals.length>1});
