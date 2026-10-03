@@ -79,7 +79,6 @@ document.querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>void showHi
 }
 async function load(){if(busy)return;notice('');$('items').textContent='Loading invoices…';try{rows=await rpc('bb_real_invoice_list',{p_mode:mode});if(!Array.isArray(rows))rows=[];manageable=new Set();if(mode==='uploaded'){try{manageable=new Set(await rpc('bb_real_invoice_manageable',{p_invoice_ids:rows.map(r=>r.invoiceId)})||[])}catch(error){console.warn('Replacement access:',error)}}fillLocations();render()}catch(e){$('items').textContent='';notice(e.message)}}
 $('chooseFileButton').onclick=()=>$('file').click();
-$('takePhotoButton').onclick=()=>$('camera').click();
 function updateComplete(){
  $('save').disabled=busy||!chosen||(replacing&&$('replaceReason').value.trim().length<8);
 }
@@ -104,8 +103,24 @@ async function startCamera(){
 $('cameraClose').onclick=stopCamera;
 $('cameraCapture').onclick=()=>{
  const video=$('cameraVideo');if(!video.videoWidth)return;
- const out=document.createElement('canvas');out.width=video.videoWidth;out.height=video.videoHeight;
- out.getContext('2d').drawImage(video,0,0);
+ // Crop the captured image to the SAME fixed frame visible in the
+ // camera preview. The user can still make an additional manual crop later.
+ const guide=$('cameraPanel').querySelector('.camera-guide').getBoundingClientRect();
+ const vb=video.getBoundingClientRect();
+ const factor=Math.min(vb.width/video.videoWidth,vb.height/video.videoHeight);
+ const imageW=video.videoWidth*factor,imageH=video.videoHeight*factor;
+ const imageX=vb.left+(vb.width-imageW)/2,imageY=vb.top+(vb.height-imageH)/2;
+ const x1=Math.max(0,Math.min(video.videoWidth,(guide.left-imageX)/factor));
+ const x2=Math.max(0,Math.min(video.videoWidth,(guide.right-imageX)/factor));
+ const y1=Math.max(0,Math.min(video.videoHeight,(guide.top-imageY)/factor));
+ const y2=Math.max(0,Math.min(video.videoHeight,(guide.bottom-imageY)/factor));
+ const out=document.createElement('canvas');
+ out.width=Math.max(1,Math.round(x2-x1));out.height=Math.max(1,Math.round(y2-y1));
+ if(out.width<video.videoWidth*.12||out.height<video.videoHeight*.12){
+  $('uploadMessage').textContent='Camera frame is outside photo preview. Use Select Photo instead.';
+  stopCamera();return;
+ }
+ out.getContext('2d').drawImage(video,x1,y1,x2-x1,y2-y1,0,0,out.width,out.height);
  out.toBlob(blob=>{
   stopCamera();
   if(blob)setFile(new File([blob],'camera-invoice.jpg',{type:'image/jpeg'}));
