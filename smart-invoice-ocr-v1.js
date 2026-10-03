@@ -232,24 +232,34 @@ async function verify(file,expected,options={}){
   if(!options.numberOnly){
    try{
     const bitmap=await createImageBitmap(file);
-    let crop;
+    const attempts=[];
+    // Photos vary in how much of the book's top edge is visible.
+    // Try the proven upper serial box first, then a lower serial position;
+    // both use the exact same four-pass isolated-digits recognizer.
+    const regions=[
+     {x:.70,y:.025,w:.23,h:.075},
+     {x:.70,y:.095,w:.25,h:.065}
+    ];
     try{
-     const x=Math.round(bitmap.width*.70),y=Math.round(bitmap.height*.025);
-     const w=Math.max(1,Math.min(bitmap.width-x,Math.round(bitmap.width*.23)));
-     const h=Math.max(1,Math.min(bitmap.height-y,Math.round(bitmap.height*.075)));
-     crop=document.createElement('canvas');
-     crop.width=w*2;crop.height=h*2;
-     const ctx=crop.getContext('2d');
-     ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-     ctx.drawImage(bitmap,x,y,w,h,0,0,crop.width,crop.height);
+     for(const region of regions){
+      const x=Math.round(bitmap.width*region.x),y=Math.round(bitmap.height*region.y);
+      const w=Math.max(1,Math.min(bitmap.width-x,Math.round(bitmap.width*region.w)));
+      const h=Math.max(1,Math.min(bitmap.height-y,Math.round(bitmap.height*region.h)));
+      const crop=document.createElement('canvas');
+      crop.width=w*2;crop.height=h*2;
+      const ctx=crop.getContext('2d');
+      ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+      ctx.drawImage(bitmap,x,y,w,h,0,0,crop.width,crop.height);
+      const blob=await new Promise(resolve=>crop.toBlob(resolve,'image/png'));
+      if(!blob)continue;
+      const result=await scanSelectedDigits(new File([blob],'auto-invoice-number.png',{type:'image/png'}),normalizedExpected);
+      if(result.status==='match')
+       return {...result,message:'Automatic number-area scan verified. '+result.message};
+      attempts.push(result);
+     }
     }finally{bitmap.close()}
-    const blob=await new Promise(resolve=>crop.toBlob(resolve,'image/png'));
-    if(!blob)throw Error('Could not prepare the automatic number crop');
-    const result=await scanSelectedDigits(new File([blob],'auto-invoice-number.png',{type:'image/png'}),normalizedExpected);
-    if(result.status==='match')
-     return {...result,message:'Automatic number-area scan verified. '+result.message};
-    return {...result,status:'unclear',
-     message:'Automatic number-area scan was inconclusive. Open Select & Scan Number Area to adjust the box. '+result.message};
+    return {status:'unclear',scanned:'',candidates:[...new Set(attempts.flatMap(r=>r.candidates||[]))],
+     message:'Automatic number-area scan could not confirm the number. Select & Scan Number Area and adjust the box around only the printed digits.'};
    }catch(error){
     console.warn('Automatic number crop:',error);
     return {status:'unclear',scanned:'',candidates:[],
