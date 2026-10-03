@@ -124,53 +124,88 @@ async function scanHeader(file,expected){
 // Camera-independent OCR: use brightness and contrast, never ink hue.
 // The operator's selected crop contains only printed digits; the full source
 // photo is never modified and remains the saved original.
-async function grayscaleNumberImage(file,variant){
+// Camera-independent selected-digit OCR: improve stroke separation and
+// let multiple independent image treatments corroborate the same number.
+async function digitImage(file,variant){
  const bitmap=await createImageBitmap(file);
  try{
-  const scale=Math.max(1,Math.min(4,1400/bitmap.width));
-  const canvas=document.createElement('canvas');
-  canvas.width=Math.max(1,Math.round(bitmap.width*scale));
-  canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  const scale=Math.max(2,Math.min(5,1500/bitmap.width));
+  const pad=28,canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(bitmap.width*scale))+pad*2;
+  canvas.height=Math.max(1,Math.round(bitmap.height*scale))+pad*2;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  if(variant==='contrast')ctx.filter='grayscale(100%) contrast(185%)';
-  else ctx.filter='grayscale(100%) contrast(125%)';
-  ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  ctx.drawImage(bitmap,pad,pad,canvas.width-pad*2,canvas.height-pad*2);
+  if(variant==='original')return canvas;
+  const image=ctx.getImageData(0,0,canvas.width,canvas.height),data=image.data;
+  const luminance=new Uint8Array(canvas.width*canvas.height);
+  const histogram=new Uint32Array(256);
+  for(let j=0,i=0;i<data.length;i+=4,j++){
+   const gray=Math.round(.299*data[i]+.587*data[i+1]+.114*data[i+2]);
+   luminance[j]=gray;histogram[gray]++;
+  }
+  // Otsu threshold learns the photo's brightness without assuming ink color.
+  let sum=0,total=luminance.length;for(let i=0;i<256;i++)sum+=i*histogram[i];
+  let background=0,lower=0,best=-1,threshold=135;
+  for(let i=0;i<256;i++){
+   background+=histogram[i];if(!background)continue;
+   const upper=total-background;if(!upper)break;
+   lower+=i*histogram[i];
+   const contrast=sum-lower;
+   const separation=Math.pow(lower/background-contrast/upper,2)*background*upper;
+   if(separation>best){best=separation;threshold=i}
+  }
+  for(let j=0,i=0;i<data.length;i+=4,j++){
+   const value=variant==='binary'
+    ?(luminance[j]<=threshold?0:255)
+    :Math.max(0,Math.min(255,Math.round((luminance[j]-128)*1.75+128)));
+   data[i]=data[i+1]=data[i+2]=value;data[i+3]=255;
+  }
+  ctx.putImageData(image,0,0);
   return canvas;
  }finally{bitmap.close()}
 }
+function selectedDigitReading(result){
+ const raw=String(result?.data?.text||'').trim();
+ // Selected-area mode must contain one isolated 4–8 digit serial.
+ // Reject multiple numbers, dates and OCR guesses with missing characters.
+ const items=extract(raw,true).filter(v=>/^\\d{4,8}$/.test(v));
+ return items.length===1?items[0]:null;
+}
 async function scanSelectedDigits(file,expected){
- const variants=[
-  {name:'original',image:file,mode:7},
-  {name:'grayscale',image:await grayscaleNumberImage(file,'normal'),mode:7},
-  {name:'contrast',image:await grayscaleNumberImage(file,'contrast'),mode:7}
+ const specs=[
+  {name:'original',mode:7},
+  {name:'grayscale',mode:7},
+  {name:'binary',mode:7},
+  {name:'grayscale-single-word',mode:8}
  ];
- const readings=[];
- for(const variant of variants){
-  const result=await window.Tesseract.recognize(variant.image,'eng',{
-   logger:()=>{},tessedit_pageseg_mode:variant.mode,
+ const images=new Map(),readings=[];
+ for(const spec of specs){
+  const imageName=spec.name.split('-')[0];
+  if(!images.has(imageName))images.set(imageName,await digitImage(file,imageName));
+  const result=await window.Tesseract.recognize(images.get(imageName),'eng',{
+   logger:()=>{},tessedit_pageseg_mode:spec.mode,
    tessedit_char_whitelist:'0123456789'
   });
-  const candidates=extract(result?.data?.text||'',true);
-  if(candidates.length===1)
-   readings.push({variant:variant.name,raw:candidates[0],value:normalize(candidates[0])});
+  const number=selectedDigitReading(result);
+  if(number)readings.push({variant:spec.name,raw:number,value:normalize(number)});
  }
  const groups=new Map();
  for(const item of readings)groups.set(item.value,(groups.get(item.value)||[]).concat(item));
- const agreeing=[...groups.entries()].filter(([,items])=>items.length>=2);
- if(agreeing.length===1&&agreeing[0][0]===expected&&
-    readings.every(item=>item.value===expected)){
-  return {status:'match',scanned:agreeing[0][1][0].raw,
-   candidates:readings.map(item=>item.raw),
-   message:'Selected printed digits matched across grayscale and original-image scans.'};
+ const matching=groups.get(expected)||[];
+ const competing=[...groups.entries()].filter(([value,items])=>value!==expected&&items.length>=2);
+ const visible=readings.map(r=>r.variant+': '+r.raw).join(' · ');
+ // Never trust one guessed number or break a tie using the expected number.
+ if(matching.length>=2&&competing.length===0){
+  return {status:'match',scanned:matching[0].raw,
+   candidates:[...new Set(readings.map(r=>r.raw))],
+   message:'Selected number verified by multiple scans. '+visible};
  }
- if(readings.length){
-  return {status:'unclear',scanned:'',
-   candidates:[...new Set(readings.map(item=>item.raw))],
-   message:'The camera-independent number scans did not agree confidently with the system invoice. Adjust the box around only the digits, retake the photo or request administrator review.'};
- }
- return {status:'unclear',scanned:'',candidates:[],
-  message:'Could not read the selected digits. Adjust the box or request administrator review.'};
+ return {status:'unclear',scanned:'',candidates:[...new Set(readings.map(r=>r.raw))],
+  message:readings.length
+   ?'OCR readings: '+visible+'. Cannot verify confidently; adjust the selection or use authorized administrator review.'
+   :'Could not isolate a complete invoice number. Adjust the box to include all digits with a little margin, or request administrator review.'};
 }
 function script(){
  if(window.Tesseract?.recognize)return Promise.resolve();
