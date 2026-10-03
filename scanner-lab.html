@@ -149,9 +149,14 @@ async function analyze(file,expected,i,worker){
  // The wide header is for diagnosis, NOT an OCR-ready digits-only crop.
  // The photographed serial in our test invoices occupies a narrow strip
  // ABOVE the dotted line; keep the upper/lower variants visible for comparison.
+ // Photograph framing varies. First try the proven original crop,
+ // then progressively LOWER windows (this photo's digits were cut off).
+ // Every window uses grayscale-independent positioning; no hue tracking.
  const narrow=[
   {x:.615,y:.190,w:.190,h:.047,basis:'digits only / standard'},
-  {x:.600,y:.184,w:.218,h:.053,basis:'digits only / slight position tolerance'}
+  {x:.600,y:.214,w:.218,h:.053,basis:'digits only / lower 1'},
+  {x:.600,y:.237,w:.218,h:.053,basis:'digits only / lower 2'},
+  {x:.600,y:.260,w:.218,h:.053,basis:'digits only / lower 3'}
  ];
  const readings=[];
  await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
@@ -185,9 +190,12 @@ async function analyze(file,expected,i,worker){
    ' (confidence '+Math.round(word.data?.confidence||0)+'%)'+
    (lineValue&&wordValue&&lineValue!==wordValue?' — modes DISAGREE; not auto-verified':'');
   section.append(diagnostic);
+  // A complete six-digit reading is enough for this isolated diagnostic.
+  // Stop rather than making additional crops vote against the clean one.
+  if(value)break;
  }
  const readingsDistinct=[...new Set([found,...readings.map(x=>x.value)].filter(Boolean))];
- const primary=readings[0]?.value||'';
+ const primary=readings.find(r=>r.value)?.value||'';
  const conflicting=readingsDistinct.length>1;
  // A failed backup crop is not a reason to discard a clean primary read.
  // But a conflicting number requires review. None of these are uploads.
@@ -196,7 +204,7 @@ async function analyze(file,expected,i,worker){
  const result=document.createElement('p');
  result.textContent='Header text: '+(found||'[unreadable]')+
   ' | Primary number crop: '+(primary||'[unreadable]')+
-  ' | Other crop: '+(readings[1]?.value||'[unreadable]')+
+  ' | Crops attempted: '+readings.length+
   ' | '+(conflicting?'Conflicting numbers — review required':
    consistent?'Consistent provisional number: '+primary:
    primary?'Provisional reading: '+primary+' (not independently confirmed)':
