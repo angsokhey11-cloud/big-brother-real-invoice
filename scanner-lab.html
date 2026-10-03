@@ -14,7 +14,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace
 #shapeEditor[hidden]{display:none}#shapeCanvas{touch-action:none;max-height:68vh;cursor:grab}#shapeOutput{max-width:420px}#shapeControls{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}.hint{color:#59738c}.shape-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:15px}.shape-cols canvas{max-height:490px;object-fit:contain}</style></head><body><main>
 <h1>🧪 BIG BROTHER · OCR Test Laboratory</h1>
 <aside>Development-only diagnostic page. It never contacts Supabase, saves an invoice, uploads customer photos or changes the live scanner. OCR executes in this browser through Tesseract.js (loaded from a CDN). Photos stay in your browser; only load test images you are permitted to process here.</aside>
-<section class="line"><label>Original invoice photographs <input id="photos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Optional expected numbers (same photo order, commas)<input id="expected" placeholder="001664, 001663, ..."></label><button id="paste" type="button">📋 Paste from Clipboard</button><button id="run">Analyze photos</button><button id="clear" type="button">Clear photos</button></section>
+<section class="line"><label>Original invoice photographs <input id="photos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label>Expected invoice number (optional)<input id="expected" placeholder="002415"></label><button id="paste" type="button">📋 Paste from Clipboard</button><button id="run">Scan latest framed photo</button><button id="clear" type="button">Clear photos</button></section>
 <section id="pasteZone" tabindex="0" style="border:2px dashed #a7bfdd;text-align:center;cursor:text" aria-label="Clipboard paste area">Click here and press <b>Ctrl+V</b> (or ⌘V on Mac), or use the Paste from Clipboard button.</section>
 <p id="queue" aria-live="polite">0 photos selected.</p>
 <section><h2>📐 Fixed-frame Invoice Editor <small>Experimental · original retained</small></h2>
@@ -56,7 +56,7 @@ function queueClipboard(blob){
  const ext=blob.type==='image/jpeg'?'jpg':blob.type.split('/')[1];
  pastedPhotos.push(new File([blob],'clipboard-'+(++pastedSequence)+'.'+ext,{type:blob.type}));
  queueStatus();
- $('status').textContent='Clipboard image added. Paste another photo or click Analyze photos.';
+ $('status').textContent='Clipboard image added. Fit it inside the fixed frame, then scan the framed copy.';
  return true;
 }
 function pasteItems(items){
@@ -221,7 +221,8 @@ $('shapeApply').onclick=async()=>{
   const name='framed-'+(source?.name||'invoice').replace(/\.[^.]+$/,'')+'.png';
   pastedPhotos.push(new File([blob],name,{type:'image/png'}));
   queueStatus();
-  $('shapeMsg').textContent='Framed copy added. Click Analyze photos to compare original and aligned photo. Original unchanged.';
+  $('shapePhoto').value=String(allPhotos().length-1);
+  $('shapeMsg').textContent='Framed copy added. Click Scan latest framed photo. Original unchanged.';
  }catch(err){$('shapeMsg').textContent='Cropping failed: '+err.message}
  finally{btn.disabled=false}
 };
@@ -444,20 +445,59 @@ async function analyze(file,expected,i,worker){
  draw();manual.append(help,preview,manualButton,manualStatus);section.append(manual);
  base.width=0;base.height=0;
 }
+
+async function analyzeLatestFramed(file,expected,worker){
+ const section=document.createElement('section');results.append(section);
+ const heading=document.createElement('h2');heading.textContent='Framed invoice: '+file.name;section.append(heading);
+ const bitmap=await createImageBitmap(file);
+ const base=document.createElement('canvas');
+ base.width=bitmap.width;base.height=bitmap.height;
+ base.getContext('2d').drawImage(bitmap,0,0);
+ bitmap.close();
+ // Read exactly the fixed green target, never the original photograph.
+ const rect={x:base.width*.665,y:base.height*.075,w:base.width*.275,h:base.height*.079};
+ const sample=crop(base,rect);
+ showCanvas(section,'Only the fixed number crop is scanned',sample);
+ const data=[];
+ for(const mode of [{id:'word',psm:'8',whitelist:''},{id:'line',psm:'7',whitelist:'0123456789'}]){
+  await worker.setParameters({tessedit_pageseg_mode:mode.psm,tessedit_char_whitelist:mode.whitelist});
+  const o=await worker.recognize(sample);
+  const raw=String(o.data?.text||'').trim(),value=digits(raw);
+  data.push({mode:mode.id,raw,value,confidence:Math.round(o.data?.confidence||0)});
+ }
+ const distinct=[...new Set(data.map(x=>x.value).filter(Boolean))];
+ const result=document.createElement('p');result.style.fontSize='18px';result.style.fontWeight='700';
+ const read=distinct.length===1?distinct[0]:'';
+ const conflict=distinct.length>1;
+ result.textContent=conflict?'Two OCR modes disagree — review required':
+   read?'OCR reads: '+read+' (provisional)': 'OCR could not read six digits';
+ if(expected){
+  result.textContent+=' | Expected: '+expected;
+  result.textContent+=read&&norm(read)===norm(expected)?
+   ' | Candidate matches; not an automatic attachment.':' | Review required.';
+ }
+ result.className=read&&(!expected||norm(read)===norm(expected))?'good':'bad';
+ section.insertBefore(result,section.children[1]);
+ const more=document.createElement('details');
+ const summary=document.createElement('summary');summary.textContent='Show detailed OCR diagnostics';
+ const raw=document.createElement('pre');
+ raw.textContent=JSON.stringify({read,expected,conflict,modes:data,source:'framed corrected copy'},null,2);
+ more.append(summary,raw);section.append(more);
+ base.width=0;base.height=0;
+}
 $('run').onclick=async()=>{
- const files=allPhotos(),expected=$('expected').value.split(',').map(x=>x.trim());
- if(!files.length){$('status').textContent='Select a photo first.';return}
+ const frames=allPhotos().filter(f=>f.name.startsWith('framed-'));
+ const file=frames[frames.length-1];
+ if(!file){$('status').textContent='First paste a photo, align it under the fixed frame, and click Crop fixed frame & add corrected image.';return}
  if(!window.Tesseract){$('status').textContent='OCR library failed to load. Check your connection.';return}
+ const expected=$('expected').value.trim();
  $('run').disabled=true;results.replaceChildren();let worker;
  try{
+  $('status').textContent='Scanning ONLY the latest framed photo: '+file.name;
   worker=await Tesseract.createWorker('eng');
-  for(let i=0;i<files.length;i++){
-   $('status').textContent='Examining '+(i+1)+' of '+files.length+'; please wait.';
-   try{await analyze(files[i],expected[i]||'',i,worker)}
-   catch(err){const item=document.createElement('section');item.textContent=files[i].name+': '+err.message;results.append(item)}
-  }
-  $('status').textContent='Offline OCR diagnostics finished. No image was uploaded or saved.';
- }catch(err){$('status').textContent='OCR startup failed: '+err.message}
+  await analyzeLatestFramed(file,expected,worker);
+  $('status').textContent='Framed-image OCR finished. Original photo was NOT analyzed or uploaded.';
+ }catch(err){$('status').textContent='Framed OCR failed: '+err.message}
  finally{if(worker)await worker.terminate();$('run').disabled=false}
 };
 </script></body></html>
