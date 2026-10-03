@@ -228,10 +228,12 @@ const EDIT={width:426,height:600,frameX:18,frameY:25,frameW:390,frameH:550};
 function editorBaseScale(){
  if(!editorBitmap)return 1;
  const angle=editorTransform.angle*Math.PI/180;
- const bw=Math.abs(editorBitmap.width*Math.cos(angle))+Math.abs(editorBitmap.height*Math.sin(angle));
- const bh=Math.abs(editorBitmap.width*Math.sin(angle))+Math.abs(editorBitmap.height*Math.cos(angle));
- // Cover the FULL crop frame at every angle, avoiding unintended blank corners.
- return Math.max(EDIT.frameW/bw,EDIT.frameH/bh);
+ const cosine=Math.abs(Math.cos(angle)),sine=Math.abs(Math.sin(angle));
+ // Each crop-frame corner, rotated back into the source image, must fit
+ // inside its original width/height. Bounding boxes alone fail near 45°.
+ const needX=cosine*EDIT.frameW+sine*EDIT.frameH;
+ const needY=sine*EDIT.frameW+cosine*EDIT.frameH;
+ return Math.max(needX/editorBitmap.width,needY/editorBitmap.height);
 }
 function paintEdited(ctx,factor=1,withGuide=true){
  if(!editorBitmap)return;
