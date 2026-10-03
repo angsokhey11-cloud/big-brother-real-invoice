@@ -217,6 +217,38 @@ function script(){
  }).catch(e=>{loadPromise=null;throw e});
  return loadPromise;
 }
+// Full-image OCR first: find the printed Inv. No label and its adjacent
+// number instead of assuming a fixed photo crop.
+function labelledNumbers(data){
+ const output=[];
+ const lines=String(data?.text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ const label=/(?:\\binv(?:oice)?[.\\s:-]*(?:no\\.?|number|#)?\\s*[:#.]?|លេខ\\s*(?:វិក្កយបត្រ|បង្កាន់ដៃ))/i;
+ const digit=s=>String(s||'').replace(/[\\s-]/g,'').replace(/[Ｏ０]/g,'0');
+ for(let i=0;i<lines.length;i++){
+  const match=lines[i].match(label);
+  if(!match)continue;
+  const tail=lines[i].slice(match.index+match[0].length);
+  const near=tail.match(/(?:^|[^0-9])([0-9]{4,8})(?![0-9])/);
+  if(near)output.push(near[1]);
+  else if(i+1<lines.length&&/^[:# .]*[0-9]{4,8}\\b/.test(lines[i+1]))
+   output.push(lines[i+1].match(/[0-9]{4,8}/)[0]);
+ }
+ // Tesseract often splits labels and serial into nearby bounding-box words.
+ const words=Array.isArray(data?.words)?data.words.filter(w=>w?.text&&w?.bbox):[];
+ const candidates=words.filter(w=>/^[0-9]{4,8}$/.test(digit(w.text)));
+ const labels=words.filter(w=>/^inv(?:oice)?[.:]?$|^no[.:]?$|^លេខ$/i.test(w.text.trim()));
+ const width=Math.max(1,...words.map(w=>w.bbox.x1||0));
+ for(const word of candidates){
+  const b=word.bbox,cy=(b.y0+b.y1)/2;
+  const nearby=labels.some(l=>{
+   const k=l.bbox,ly=(k.y0+k.y1)/2;
+   // A printed invoice label normally sits just to the left of its serial.
+   return k.x0<b.x0&&b.x0-k.x1<width*.27&&Math.abs(cy-ly)<Math.max(32,(b.y1-b.y0)*1.7);
+  });
+  if(nearby)output.push(digit(word.text));
+ }
+ return [...new Set(output.filter(x=>/^[0-9]{4,8}$/.test(x)))];
+}
 async function verify(file,expected,options={}){
  if(!file)return {status:'unclear',message:'Select an image to scan.',scanned:'',candidates:[]};
  if(!/^image\/(png|jpeg|webp)$/.test(file.type))return {status:'unclear',message:'Automatic verification requires a JPG, PNG or WebP photo. PDF requires an authorized manual review.',scanned:'',candidates:[]};
@@ -229,39 +261,44 @@ async function verify(file,expected,options={}){
   // Different invoice layouts can still use manually adjusted selections.
   if(!options.numberOnly){
    try{
+    // One whole-photo recognition uses the printed label and surrounding
+    // layout. Only a unique label-associated serial may automatically match.
+    const whole=await window.Tesseract.recognize(file,'eng',{logger:()=>{}});
+    const labelled=labelledNumbers(whole?.data);
+    const distinct=[...new Set(labelled.map(normalize))];
+    if(distinct.length===1){
+     const scanned=labelled[0];
+     if(distinct[0]===normalizedExpected)
+      return {status:'match',scanned,candidates:[scanned],
+       message:'Invoice number found next to the printed invoice label.'};
+     return {status:'unclear',scanned,candidates:[scanned],
+      message:'The printed invoice label reads '+scanned+', but the system expects '+expected+'. Inspect the original photo or use administrator review.'};
+    }
+    if(distinct.length>1)return {status:'unclear',scanned:'',candidates:labelled,
+      message:'More than one number appears near invoice labels. Select the printed serial or use administrator review.'};
+    // For books where the OCR cannot read the printed label, retain the
+    // original simple upper-right serial as an inexpensive fallback.
     const bitmap=await createImageBitmap(file);
-    const attempts=[];
-    // Photos vary in how much of the book's top edge is visible.
-    // Try the proven upper serial box first, then a lower serial position;
-    // both use the exact same four-pass isolated-digits recognizer.
-    const regions=[
-     {x:.70,y:.025,w:.23,h:.075},
-     {x:.70,y:.095,w:.25,h:.065}
-    ];
     try{
-     for(const region of regions){
+     for(const region of [{x:.70,y:.025,w:.23,h:.075},{x:.70,y:.095,w:.25,h:.065}]){
       const x=Math.round(bitmap.width*region.x),y=Math.round(bitmap.height*region.y);
       const w=Math.max(1,Math.min(bitmap.width-x,Math.round(bitmap.width*region.w)));
       const h=Math.max(1,Math.min(bitmap.height-y,Math.round(bitmap.height*region.h)));
       const crop=document.createElement('canvas');
       crop.width=w*2;crop.height=h*2;
-      const ctx=crop.getContext('2d');
-      ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-      ctx.drawImage(bitmap,x,y,w,h,0,0,crop.width,crop.height);
+      crop.getContext('2d').drawImage(bitmap,x,y,w,h,0,0,crop.width,crop.height);
       const blob=await new Promise(resolve=>crop.toBlob(resolve,'image/png'));
       if(!blob)continue;
-      const result=await scanSelectedDigits(new File([blob],'auto-invoice-number.png',{type:'image/png'}),normalizedExpected);
-      if(result.status==='match')
-       return {...result,message:'Automatic number-area scan verified. '+result.message};
-      attempts.push(result);
+      const result=await scanSelectedDigits(new File([blob],'header-number.png',{type:'image/png'}),normalizedExpected);
+      if(result.status==='match')return {...result,message:'Printed header number read successfully.'};
      }
     }finally{bitmap.close()}
-    return {status:'unclear',scanned:'',candidates:[...new Set(attempts.flatMap(r=>r.candidates||[]))],
-     message:'Automatic number-area scan could not confirm the number. Select & Scan Number Area and adjust the box around only the printed digits.'};
-   }catch(error){
-    console.warn('Automatic number crop:',error);
     return {status:'unclear',scanned:'',candidates:[],
-     message:'Automatic number scan unavailable. Select & Scan Number Area or request administrator review.'};
+     message:'Could not reliably identify the printed invoice number. Select & Scan Number Area or request administrator review.'};
+   }catch(error){
+    console.warn('Label-aware invoice OCR:',error);
+    return {status:'unclear',scanned:'',candidates:[],
+     message:'Automatic OCR unavailable. Select & Scan Number Area or request administrator review.'};
    }
   }
   if(options.numberOnly){
