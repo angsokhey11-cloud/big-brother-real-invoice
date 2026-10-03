@@ -166,11 +166,22 @@ async function analyze(file,expected,i,worker){
   const rect={x:base.width*preset.x,y:base.height*preset.y,
    w:base.width*preset.w,h:base.height*preset.h,basis:preset.basis};
   const sample=crop(base,rect);
-  const scanned=await worker.recognize(sample);
-  const raw=String(scanned.data?.text||'').trim();
-  const value=digits(raw);
-  readings.push({name:rect.basis,raw,value});
+  // Diagnostic only: compare a digit-only line to a normal single-word
+  // read. Never infer the invoice number from the expected value.
+  await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
+  const line=await worker.recognize(sample);
+  const lineRaw=String(line.data?.text||'').trim();
+  await worker.setParameters({tessedit_pageseg_mode:'8',tessedit_char_whitelist:''});
+  const word=await worker.recognize(sample);
+  const wordRaw=String(word.data?.text||'').trim();
+  const value=digits(lineRaw)||digits(wordRaw);
+  readings.push({name:rect.basis,raw:'line: '+JSON.stringify(lineRaw)+' / word: '+JSON.stringify(wordRaw),value});
   showCanvas(section,'Number-only candidate: '+rect.basis+' — '+(value||'[unreadable]'),sample);
+  const diagnostic=document.createElement('pre');
+  diagnostic.textContent='Raw OCR: digit-only line '+JSON.stringify(lineRaw)+
+   ' (confidence '+Math.round(line.data?.confidence||0)+'%) | normal word '+JSON.stringify(wordRaw)+
+   ' (confidence '+Math.round(word.data?.confidence||0)+'%)';
+  section.append(diagnostic);
  }
  const readingsDistinct=[...new Set([found,...readings.map(x=>x.value)].filter(Boolean))];
  const result=document.createElement('p');
@@ -229,7 +240,11 @@ async function analyze(file,expected,i,worker){
    await localWorker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
    const answer=await localWorker.recognize(sample);
    const read=String(answer.data?.text||'').trim();
-   manualStatus.textContent='Selected crop raw OCR: '+(read||'[unreadable]')+' | Six digits: '+(digits(read)||'[unreadable]');
+   await localWorker.setParameters({tessedit_pageseg_mode:'8',tessedit_char_whitelist:''});
+   const word=await localWorker.recognize(sample);
+   const rawWord=String(word.data?.text||'').trim();
+   manualStatus.textContent='Selected crop: digit-only line '+JSON.stringify(read)+'; ordinary word '+
+    JSON.stringify(rawWord)+' | Six digits: '+(digits(read)||digits(rawWord)||'[unreadable]');
   }catch(e){manualStatus.textContent='OCR error: '+e.message}
   finally{if(localWorker)await localWorker.terminate();manualButton.disabled=false}
  };
