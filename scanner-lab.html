@@ -18,7 +18,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace
 <section id="pasteZone" tabindex="0" style="border:2px dashed #a7bfdd;text-align:center;cursor:text" aria-label="Clipboard paste area">Click here and press <b>Ctrl+V</b> (or ⌘V on Mac), or use the Paste from Clipboard button.</section>
 <p id="queue" aria-live="polite">0 photos selected.</p>
 <section><h2>📐 Fixed-frame Invoice Editor <small>Experimental · original retained</small></h2>
-<p>The orange portrait frame stays FIXED. Drag the photo behind it; zoom and rotate until the paper fills its four corners. Then add the aligned copy to the test queue. This does not bend or alter paper perspective.</p>
+<p>The orange portrait frame stays FIXED. Drag, zoom and rotate the photo until the paper fills it. Also align the printed six-digit number inside the GREEN NUMBER TARGET at the upper-right; that is the crop our corrected-image OCR will scan. This does not bend or alter paper perspective.</p>
 <div id="shapeControls"><label>Photo to align <select id="shapePhoto"></select></label><button id="shapeOpen" type="button">Open fixed frame</button></div>
 <div id="shapeEditor" hidden>
 <p id="shapeMsg" aria-live="polite">Drag photo to reposition it; adjust zoom and rotation until the four paper corners meet the frame.</p>
@@ -139,6 +139,14 @@ function shapeDraw(){
  ctx.fillRect(0,FRAME.y+FRAME.h,SW,SH-FRAME.y-FRAME.h);
  ctx.strokeStyle='#ffae28';ctx.lineWidth=4;
  ctx.strokeRect(FRAME.x,FRAME.y,FRAME.w,FRAME.h);
+ // This guide is drawn on the EDITOR only; it never marks the image export.
+ const target={x:FRAME.x+FRAME.w*.665,y:FRAME.y+FRAME.h*.075,
+  w:FRAME.w*.275,h:FRAME.h*.079};
+ ctx.strokeStyle='#10a664';ctx.lineWidth=3;
+ ctx.strokeRect(target.x,target.y,target.w,target.h);
+ ctx.fillStyle='#09643b';ctx.fillRect(target.x,target.y-17,112,17);
+ ctx.fillStyle='white';ctx.font='bold 12px Arial';
+ ctx.fillText('NUMBER TARGET',target.x+3,target.y-4);
  ctx.fillStyle='#ffae28';ctx.font='bold 15px Arial';
  ctx.fillText('FIXED INVOICE FRAME',FRAME.x+12,FRAME.y+23);
  shapePreview();
@@ -161,7 +169,7 @@ $('shapeOpen').onclick=async()=>{
   const bmp=await createImageBitmap(file);
   if(shapeBitmap)shapeBitmap.close();
   shapeBitmap=bmp;
-  $('shapeMsg').textContent='Editing '+file.name+'. The frame is fixed: drag, zoom and rotate the photo to fit.';
+  $('shapeMsg').textContent='Editing '+file.name+'. Align the paper with the orange frame AND all six digits inside the green NUMBER TARGET.';
   shapeFit();
  }catch(e){$('shapeMsg').textContent='Could not open photo: '+e.message}
 };
@@ -296,17 +304,29 @@ async function analyze(file,expected,i,worker){
  rects.push({x:base.width*.48,y:base.height*.13,w:base.width*.47,h:base.height*.13,basis:'wide header, including leftmost digit'});
  rects.push({x:base.width*.52,y:base.height*.19,w:base.width*.41,h:base.height*.10,basis:'lower shifted header'});
  // The wide header is for diagnosis, NOT an OCR-ready digits-only crop.
- // The photographed serial in our test invoices occupies a narrow strip
+ // The photographed serial in unframed test invoices occupies a narrow strip
  // ABOVE the dotted line; keep the upper/lower variants visible for comparison.
  // Photograph framing varies. First try the proven original crop,
  // then progressively LOWER windows (this photo's digits were cut off).
  // Every window uses grayscale-independent positioning; no hue tracking.
- const narrow=[
-  {x:.615,y:.190,w:.190,h:.047,basis:'digits only / standard'},
-  {x:.600,y:.214,w:.218,h:.053,basis:'digits only / lower 1'},
-  {x:.600,y:.237,w:.218,h:.053,basis:'digits only / lower 2'},
-  {x:.600,y:.260,w:.218,h:.053,basis:'digits only / lower 3'}
+ const isFramed=/^framed-/i.test(file.name);
+ const narrow=isFramed?[
+  {x:.665,y:.075,w:.275,h:.079,basis:'FRAMED: green number target'},
+  {x:.675,y:.085,w:.250,h:.065,basis:'FRAMED: inner target tolerance'}
+ ]:[
+  {x:.615,y:.190,w:.190,h:.047,basis:'ORIGINAL: standard'},
+  {x:.600,y:.214,w:.218,h:.053,basis:'ORIGINAL: lower 1'},
+  {x:.600,y:.237,w:.218,h:.053,basis:'ORIGINAL: lower 2'},
+  {x:.600,y:.260,w:.218,h:.053,basis:'ORIGINAL: lower 3'}
  ];
+ if(isFramed){
+  const guide=document.createElement('canvas');guide.width=base.width;guide.height=base.height;
+  const g=guide.getContext('2d');g.drawImage(base,0,0);
+  const t=narrow[0];
+  g.strokeStyle='#10a664';g.lineWidth=Math.max(3,base.width*.004);
+  g.strokeRect(t.x*base.width,t.y*base.height,t.w*base.width,t.h*base.height);
+  showCanvas(section,'ACTUAL OCR TARGET ON FRAMED PHOTO (green guide, not saved)',guide);
+ }
  const readings=[];
  await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789'});
  for(const rect of rects){
