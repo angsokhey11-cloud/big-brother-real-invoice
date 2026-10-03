@@ -209,7 +209,7 @@ async function analyze(file,expected,i,worker){
  }
  section.insertBefore(result,section.children[1]);
  const raw=document.createElement('details');raw.innerHTML='<summary>View raw header OCR and coordinates</summary>';
- const pre=document.createElement('pre');pre.textContent=JSON.stringify({header:data.text,recognized:readingsDistinct,readings,expected,confident},null,2);
+ const pre=document.createElement('pre');pre.textContent=JSON.stringify({header:data.text,recognized:readingsDistinct,readings,expected,primary,consistent,conflicting},null,2);
  raw.append(pre);section.append(raw);
  // Show the complete photo header so operators can diagnose geometry
  // independently of guessed fallback windows. This tool never attaches files.
