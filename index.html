@@ -43,7 +43,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
  <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong><button type="button" class="alt" id="invoiceViewerClose">✕ Close</button></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
-<script src="smart-invoice-ocr-v1.js?v=20261003-simple-selection1"></script>
+<script src="smart-invoice-ocr-v1.js?v=20261003-simple-pending2"></script>
 <script>
 (()=>{
 'use strict';
@@ -118,9 +118,8 @@ async function openCrop(){
   if($('cropPanel').hidden)return;
   const canvas=$('cropCanvas'),scale=Math.min(1,850/cropBitmap.width);
   canvas.width=Math.round(cropBitmap.width*scale);canvas.height=Math.round(cropBitmap.height*scale);
-  // Start on the upper-right printed red serial, above the handwritten date.
-  // This preset is adjustable by dragging for different paper/photo framing.
-  cropRect={x:canvas.width*.70,y:canvas.height*.025,w:canvas.width*.23,h:canvas.height*.075};
+  // Same adjustable default serial selection as Invoice Generator.
+  cropRect={x:canvas.width*.70,y:canvas.height*.095,w:canvas.width*.25,h:canvas.height*.065};
   drawCrop();
  }catch(e){$('uploadMessage').textContent='Could not open image for cropping: '+e.message;$('cropPanel').hidden=true}
 }
