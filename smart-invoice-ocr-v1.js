@@ -180,67 +180,10 @@ function selectedDigitReading(result){
 // Prepare an isolated number crop consistently, regardless of how tightly
 // staff drew the blue box. Exclude a *detected* lower dotted rule and add
 // white breathing room so Tesseract does not lose the first/last digit.
-async function prepareSerialCrop(file){
- const bitmap=await createImageBitmap(file);
- try{
-  const w=bitmap.width,h=bitmap.height;
-  if(w<35||h<20)return file;
-  const source=document.createElement('canvas');
-  source.width=w;source.height=h;
-  const ctx=source.getContext('2d',{willReadFrequently:true});
-  ctx.drawImage(bitmap,0,0);
-  const pixels=ctx.getImageData(0,0,w,h).data;
-  const dark=(x,y)=>{
-   const i=(y*w+x)*4;
-   return .299*pixels[i]+.587*pixels[i+1]+.114*pixels[i+2]<175;
-  };
-  // A dotted rule spans most of the width but has many separate short runs.
-  // Older detection required excessive ink density and missed real photos.
-  let rule=-1;
-  const left=Math.floor(w*.03),right=Math.ceil(w*.97);
-  for(let y=Math.floor(h*.55);y<Math.floor(h*.95);y++){
-   let count=0,first=-1,last=-1,runs=0,active=false;
-   for(let x=left;x<right;x++){
-    const on=dark(x,y);
-    if(on){count++;if(first<0)first=x;last=x;if(!active)runs++}
-    active=on;
-   }
-   const span=last-first+1;
-   const density=count/(right-left);
-   if(first>=0&&span>w*.57&&density>.075&&density<.72&&runs>=5){
-    // Choose the highest eligible row to avoid preserving half of a line.
-    rule=y;break;
-   }
-  }
-  // Avoid mistaking low descenders for a rule: must be clear ink above it.
-  let end=h;
-  if(rule>0){
-   let earlierRows=0;
-   for(let y=Math.round(h*.13);y<Math.max(0,rule-Math.round(h*.075));y++){
-    let rowInk=0;
-    for(let x=left;x<right;x+=2)if(dark(x,y))rowInk++;
-    if(rowInk>=3)earlierRows++;
-   }
-   if(earlierRows>=Math.max(3,Math.round(h*.035)))
-    end=Math.max(1,rule-Math.max(2,Math.round(h*.018)));
-  }
-  // Surround even tightly selected digits with a white border. This is a
-  // single image treatment, not repeated OCR or expected-number guessing.
-  const pad=Math.max(12,Math.round(Math.min(w,end)*.11));
-  const output=document.createElement('canvas');
-  output.width=w+pad*2;output.height=end+pad*2;
-  const out=output.getContext('2d');
-  out.fillStyle='#ffffff';out.fillRect(0,0,output.width,output.height);
-  out.drawImage(source,0,0,w,end,pad,pad,w,end);
-  const blob=await new Promise(resolve=>output.toBlob(resolve,'image/png'));
-  return blob?new File([blob],'isolated-invoice-number.png',{type:'image/png'}):file;
- }finally{bitmap.close()}
-}
 async function scanSelectedDigits(file,expected){
  // The user already isolated the printed number. Read this crop directly:
  // no color detection, voting, worker configuration or multi-mode guessing.
- const prepared=await prepareSerialCrop(file);
- const response=await window.Tesseract.recognize(prepared,'eng',{logger:()=>{}});
+ const response=await window.Tesseract.recognize(file,'eng',{logger:()=>{}});
  const raw=String(response?.data?.text||'').trim();
  // Permit harmless OCR spacing and leading zeros, but never infer missing
  // digits or auto-correct characters based on the expected system number.
