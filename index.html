@@ -61,11 +61,10 @@ let mode='pending',rows=[],selected=null,chosen=null,sourcePhoto=null,busy=false
 
 const clean=v=>String(v??'').trim();
 function invoiceMoney(value,currency){
- const c=clean(currency).toUpperCase()==='KHR'?'KHR':'USD';
+ const cur=clean(currency).toUpperCase()==='KHR'?'KHR':'USD';
  const n=Number(value||0);
- return c==='KHR'
-   ? '៛'+n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})
-   : '
+ if(cur==='KHR') return '៛'+n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
+ return '
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
 async function token(){let s=readSession();if(!s?.access_token)throw Error('Please sign in through the BIG BROTHER Dashboard.');if(s.expires_at&&s.expires_at<Math.floor(Date.now()/1000)+45){let r=await fetch(URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});const v=await r.json();if(!r.ok)throw Error(v.msg||v.message||'Session expired');v.expires_at=Math.floor(Date.now()/1000)+v.expires_in;localStorage.setItem(SESSION,JSON.stringify(v));s=v}return s.access_token}
 async function request(path,opts={}){const t=await token();const r=await fetch(URL+path,{...opts,headers:{apikey:KEY,Authorization:'Bearer '+t,...opts.headers},cache:'no-store'});if(!r.ok){let msg=await r.text();try{const v=JSON.parse(msg);msg=v.message||v.error||msg}catch{}throw Error(msg)}if(r.status===204)return null;return r.json()}
