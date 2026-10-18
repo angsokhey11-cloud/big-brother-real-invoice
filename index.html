@@ -66,6 +66,8 @@ function invoiceMoney(value,currency){
  if(cur==='KHR') return '៛'+n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
  return '$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+function bbScannerDay(x){const v=String(x??'').trim(),m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/),mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];if(m&&+m[2]>=1&&+m[2]<=12)return m[3]+'-'+mons[+m[2]-1]+'-'+m[1];const d=new Date(x);return Number.isNaN(d.getTime())?v||'-':d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Phnom_Penh'}).replace(/ /g,'-')}
+function bbScannerTime(x){const d=new Date(x);return Number.isNaN(d.getTime())?String(x??'-'):bbScannerDay(d)+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Phnom_Penh'})}
 function readSession(){try{return JSON.parse(localStorage.getItem(SESSION)||'null')}catch{return null}}
 async function token(){let s=readSession();if(!s?.access_token)throw Error('Please sign in through the BIG BROTHER Dashboard.');if(s.expires_at&&s.expires_at<Math.floor(Date.now()/1000)+45){let r=await fetch(URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});const v=await r.json();if(!r.ok)throw Error(v.msg||v.message||'Session expired');v.expires_at=Math.floor(Date.now()/1000)+v.expires_in;localStorage.setItem(SESSION,JSON.stringify(v));s=v}return s.access_token}
 async function request(path,opts={}){const t=await token();const r=await fetch(URL+path,{...opts,headers:{apikey:KEY,Authorization:'Bearer '+t,...opts.headers},cache:'no-store'});if(!r.ok){let msg=await r.text();try{const v=JSON.parse(msg);msg=v.message||v.error||msg}catch{}throw Error(msg)}if(r.status===204)return null;return r.json()}
@@ -82,7 +84,7 @@ function render(){
  const search=clean($('search').value).toLowerCase(),location=$('locationFilter').value;
  const filtered=rows.filter(r=>(!location||clean(r.location)===location)&&(!search||[r.customer,r.invoiceNo].some(v=>clean(v).toLowerCase().includes(search))));
  $('filterCount').textContent=filtered.length+' of '+rows.length+' '+(mode==='pending'?'pending invoices':'uploaded originals')+' shown';$('items').innerHTML=filtered.length?filtered.map(r=>
-'<article class="card row"><div><strong>'+esc(r.customer||'Unknown customer')+'</strong> <span class="tag '+(mode==='uploaded'?'success':'')+'">'+(mode==='pending'?'Needs scan':r.source==='history_capture'?'Digital Original':r.source==='generator'?'Paper · Generator':'Paper Original')+'</span><div class="meta">Invoice: '+esc(r.invoiceNo)+' · '+esc(r.invoiceDate)+'<br>Location: '+esc(r.location)+' · Outstanding: '+invoiceMoney(r.outstanding,r.currency)+(r.uploadedAt?'<br>Uploaded: '+esc(new Date(r.uploadedAt).toLocaleString()):'')+'</div></div><div class="actions"><button data-id="'+esc(r.invoiceId)+'">'+(mode==='pending'?'📷 Upload':'👁 View')+'</button>'+
+'<article class="card row"><div><strong>'+esc(r.customer||'Unknown customer')+'</strong> <span class="tag '+(mode==='uploaded'?'success':'')+'">'+(mode==='pending'?'Needs scan':r.source==='history_capture'?'Digital Original':r.source==='generator'?'Paper · Generator':'Paper Original')+'</span><div class="meta">Invoice: '+esc(r.invoiceNo)+' · '+esc(bbScannerDay(r.invoiceDate))+'<br>Location: '+esc(r.location)+' · Outstanding: '+invoiceMoney(r.outstanding,r.currency)+(r.uploadedAt?'<br>Uploaded: '+esc(bbScannerTime(r.uploadedAt)):'')+'</div></div><div class="actions"><button data-id="'+esc(r.invoiceId)+'">'+(mode==='pending'?'📷 Upload':'👁 View')+'</button>'+
 (mode==='uploaded'&&manageable.has(r.invoiceId)?'<button class="alt" data-replace="'+esc(r.invoiceId)+'">✎ Replace Picture</button><button class="alt" data-history="'+esc(r.invoiceId)+'">History</button>':'')+'</div></article>').join(''):'<div class="card">No matching '+(mode==='pending'?'invoices needing a scan':'uploaded originals')+'.</div>';
 document.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.invoiceId===b.dataset.id);if(r)mode==='pending'?openUpload(r):void view(r)});
 document.querySelectorAll('[data-replace]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.invoiceId===b.dataset.replace);if(r&&manageable.has(r.invoiceId))openUpload(r,true)});
@@ -412,7 +414,7 @@ function setFile(f){
 async function showHistory(id){
  try{
   const history=await rpc('bb_real_invoice_replace_history',{p_invoice_id:id});
-  const details=history.length?history.map(h=>new Date(h.date).toLocaleString()+' — '+h.reason).join('\n'):'No replacements recorded yet.';
+  const details=history.length?history.map(h=>bbScannerTime(h.date)+' — '+h.reason).join('\n'):'No replacements recorded yet.';
   window.alert('Original invoice adjustment history\n\n'+details);
  }catch(e){notice(e.message)}
 }
@@ -442,7 +444,7 @@ function openUpload(r,replace=false){
  selected=r;replacing=replace;stopCamera();
  $('modalTitle').textContent=replace?'Replace Original Invoice':'Upload Original Invoice';
  $('save').textContent=replace?'Complete Replacement':'Complete';
- $('target').textContent=r.customer+' · '+r.invoiceNo+' · '+r.invoiceDate;
+ $('target').textContent=r.customer+' · '+r.invoiceNo+' · '+bbScannerDay(r.invoiceDate);
  $('modal').hidden=false;$('confirmModal').hidden=true;
  setFile(null);$('editPhoto').hidden=true;
  $('replaceFields').hidden=!replace;$('replaceReason').value='';
