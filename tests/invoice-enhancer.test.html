@@ -43,16 +43,18 @@ check('B&W has separate increasing strength profiles',()=>{
  const k=a=>val(a,70,20)-val(a,33,100);
  return k(naturalBw)<k(bw)&&k(bw)<k(strongBw);
 });
-check('Document Clean renders uneven paper as white without replacing source',()=>{
+check('Document Clean lifts uneven paper without bleaching it pure white',()=>{
  const paper=x=>val(docClear,x,20);
- return paper(20)>245&&paper(145)>245&&Math.abs(paper(20)-paper(145))<6;
+ return paper(20)>val(source,20,20)&&paper(145)>val(source,145,20)
+   &&paper(20)<245&&paper(145)<245
+   &&Math.abs(paper(20)-paper(145))<=Math.abs(val(source,20,20)-val(source,145,20));
 });
 check('Document Clean increases photographed-ink contrast with strength',()=>{
  const k=a=>val(a,145,20)-val(a,33,100);
  return k(docNatural)<k(docClear)&&k(docClear)<k(docStrong);
 });
-check('Document Clean preserves grayscale and original alpha',()=>docClear.every((v,i)=>
- i%4===3? v===255 : v===docClear[i-i%4]));
+check('Document Clean preserves original alpha across every pixel',()=>docClear.every((v,i)=>
+ i%4===3? v===source[i] : true));
 check('Document Clean leaves original pixels unchanged',()=>source.every((v,i)=>v===before[i]));
 check('Strength processing leaves all original pixels unchanged',
  ()=>source.every((v,i)=>v===before[i]));
@@ -64,6 +66,38 @@ const colors=new Uint8ClampedArray([20,60,180,255,180,30,12,130]);
 const values=api.enhancePixels(colors,2,1,'color');
 check('Blue ink and red stamp hues stay distinguishable',
  ()=>values[2]>values[0]&&values[4]>values[5]&&values[7]===130);
+const toneW=96,toneH=92,paper=new Uint8ClampedArray(toneW*toneH*4);
+for(let y=0;y<toneH;y++)for(let x=0;x<toneW;x++){
+ const i=(y*toneW+x)*4,shade=x<40?.78:1;
+ const blue=x>18&&x<27&&y>15&&y<78;
+ const red=x>52&&x<60&&y>15&&y<78;
+ const faint=x>77&&x<83&&y>15&&y<78;
+ const rgb=blue?[52,90,175]:red?[170,75,80]:
+   faint?[208,203,201]:[224,216,204];
+ paper[i]=Math.round(rgb[0]*shade);paper[i+1]=Math.round(rgb[1]*shade);
+ paper[i+2]=Math.round(rgb[2]*shade);paper[i+3]=255;
+}
+const scanColor=api.enhancePixels(paper,toneW,toneH,'scan','clear');
+const at=(a,x,y)=>{
+ const i=(y*toneW+x)*4;
+ return [a[i],a[i+1],a[i+2]];
+};
+check('Document Clean keeps blue pen blue and red stamp red',()=>{
+ const blue=at(scanColor,22,42),red=at(scanColor,56,42);
+ return blue[2]>blue[0]+25&&red[0]>red[1]+35;
+});
+check('Document Clean preserves warm paper rather than gray or pure white',()=>{
+ const rgb=at(scanColor,90,8);
+ return rgb[0]>rgb[1]&&rgb[1]>rgb[2]&&rgb[0]<248;
+});
+check('Faint pencil remains distinct from surrounding paper',()=>{
+ const faint=at(scanColor,80,40),background=at(scanColor,90,40);
+ return background[1]-faint[1]>=8;
+});
+check('Paper shadow remains gently graded, not unnaturally bleached',()=>{
+ const left=at(scanColor,6,8),right=at(scanColor,90,8);
+ return right[1]>left[1]&&left[1]>125;
+});
 check('Unsupported mode is rejected',()=>{
  try{api.enhancePixels(source,w,h,'invalid')}catch{return true}return false;
 });
@@ -85,7 +119,7 @@ try{
  check('Canvas honors Clear as default and accepts Strong explicitly',
   ()=>enhanced.strength==='clear'&&strongPreview.strength==='strong'
      &&strongPreview.blob.size>0);
- check('Browser Canvas supports the optional Document Clean mode',
+ check('Browser Canvas supports natural-colored Document Clean',
   ()=>cleanPreview.blob.type==='image/jpeg'&&cleanPreview.mode==='scan'&&cleanPreview.strength==='clear');
  check('Original Blob remains a PNG, never modified',
   ()=>original.type==='image/png'&&original.size>0);
