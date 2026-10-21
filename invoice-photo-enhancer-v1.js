@@ -1,4 +1,4 @@
-/* BIG BROTHER — Invoice Scanner V2 document enhancement.
+/* BIG BROTHER — Invoice Scanner V3 document enhancement.
  * Pure on-device Canvas processing; no AI, cloud requests or external assets.
  * The caller must always upload/store its ORIGINAL Blob, never this result.
  * Enhanced images are temporary previews only and are safe to discard.
@@ -14,22 +14,25 @@
   const LEVELS=Object.freeze({
     natural:Object.freeze({
       color:{contrast:1.14,lift:7,shadow:.32,maxLift:28,sharp:.18,maxSharp:8},
-      bw:{contrast:1.31,lift:10,shadow:.32,maxLift:35,sharp:.22,maxSharp:8}
+      bw:{contrast:1.31,lift:10,shadow:.32,maxLift:35,sharp:.22,maxSharp:8},
+      scan:{inkGain:1.48,inkThreshold:3.5,sharp:.13,maxSharp:5}
     }),
     clear:Object.freeze({
       color:{contrast:1.27,lift:13,shadow:.44,maxLift:38,sharp:.23,maxSharp:10},
-      bw:{contrast:1.41,lift:14,shadow:.42,maxLift:44,sharp:.26,maxSharp:10}
+      bw:{contrast:1.41,lift:14,shadow:.42,maxLift:44,sharp:.26,maxSharp:10},
+      scan:{inkGain:1.88,inkThreshold:3,sharp:.15,maxSharp:6}
     }),
     strong:Object.freeze({
       color:{contrast:1.42,lift:18,shadow:.60,maxLift:52,sharp:.32,maxSharp:14},
-      bw:{contrast:1.54,lift:20,shadow:.56,maxLift:55,sharp:.34,maxSharp:13}
+      bw:{contrast:1.54,lift:20,shadow:.56,maxLift:55,sharp:.34,maxSharp:13},
+      scan:{inkGain:2.3,inkThreshold:2,sharp:.18,maxSharp:7}
     })
   });
 
   // Kept independent of Canvas so arithmetic can be regression-tested.
   function enhancePixels(data,width,height,mode,strength='clear'){
-    const bw=mode==='bw';
-    if(mode!=='color'&&!bw)throw new Error('Unsupported enhancement mode.');
+    const bw=mode==='bw',scan=mode==='scan';
+    if(mode!=='color'&&!bw&&!scan)throw new Error('Unsupported enhancement mode.');
     if(!Object.prototype.hasOwnProperty.call(LEVELS,strength))
       throw new Error('Unsupported enhancement strength.');
     const profile=LEVELS[strength][mode];
@@ -61,7 +64,7 @@
     }
     const result=new Uint8ClampedArray(data.length);
     const rowBrightness=new Float32Array(cols);
-    const contrast=profile.contrast,baseLift=profile.lift,maxLift=profile.maxLift;
+    const contrast=profile.contrast||1,baseLift=profile.lift||0,maxLift=profile.maxLift||0;
     const stride=width*4;
     for(let y=0;y<height;y++){
       const cellY=Math.max(0,Math.min(rows-1,y/tile-.5));
@@ -78,16 +81,27 @@
         const local=rowBrightness[cell]+(adjacent-rowBrightness[cell])*mix;
         const red=data[i],green=data[i+1],blue=data[i+2];
         const lum=(77*red+150*green+29*blue)/256;
-        let shadow=(reference-local)*profile.shadow;
-        if(shadow<0)shadow=0;else if(shadow>maxLift)shadow=maxLift;
-        const corrected=(lum-125)*contrast+125+baseLift+
-          shadow*(.24+.76*lum/255);
-        if(bw){
-          result[i]=result[i+1]=result[i+2]=corrected;
+        if(scan){
+          // Optional high-contrast paper-normalization: estimate local white
+          // level, then measure real captured ink against it. This only maps
+          // existing pixels, never interprets or reconstructs document text.
+          // Fine pencil, security paper texture and light stamps may fade:
+          // the staff must compare the untouched Original.
+          const depth=Math.max(0,local-lum-profile.inkThreshold);
+          const normalized=255-depth*profile.inkGain;
+          result[i]=result[i+1]=result[i+2]=normalized;
         }else{
-          result[i]=corrected+(red-lum)*.93;
-          result[i+1]=corrected+(green-lum)*.93;
-          result[i+2]=corrected+(blue-lum)*.93;
+          let shadow=(reference-local)*profile.shadow;
+          if(shadow<0)shadow=0;else if(shadow>maxLift)shadow=maxLift;
+          const corrected=(lum-125)*contrast+125+baseLift+
+            shadow*(.24+.76*lum/255);
+          if(bw){
+            result[i]=result[i+1]=result[i+2]=corrected;
+          }else{
+            result[i]=corrected+(red-lum)*.93;
+            result[i+1]=corrected+(green-lum)*.93;
+            result[i+2]=corrected+(blue-lum)*.93;
+          }
         }
         result[i+3]=data[i+3];
       }
@@ -132,7 +146,7 @@
   }
 
   async function enhance(blob,mode='color',strength='clear'){
-    if(!['color','bw'].includes(mode))throw new Error('Unsupported enhancement mode.');
+    if(!['color','bw','scan'].includes(mode))throw new Error('Unsupported enhancement mode.');
     if(!Object.prototype.hasOwnProperty.call(LEVELS,strength))
       throw new Error('Unsupported enhancement strength.');
     if(!blob?.type?.startsWith('image/'))throw new Error('Select a JPG, PNG or WebP invoice photo.');

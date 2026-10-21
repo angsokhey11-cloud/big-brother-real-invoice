@@ -44,8 +44,21 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-head .viewer-enhance-actions .active{background:#1769af;color:#fff}
 .viewer-enhance-status{font-size:11px;color:#516b88;padding:2px 12px;text-align:center}
 @media(max-width:560px){.invoice-viewer-head{flex-wrap:wrap}.invoice-viewer-head .viewer-enhance-actions{order:3;width:100%;justify-content:center}}
-</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script><script src="invoice-photo-enhancer-v1.js?v=20261021-scanner-v2-strength1"></script></head><body><div class="app">
-<header class="top"><div><h1>📷 Real Invoice Scanner V2</h1><small>BIG BROTHER · On-device Auto Enhance · Original paper archived</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
+
+/* Scanner V3: both enhancement panels are native keyboard-accessible disclosures. */
+.scan-enhance-tools[hidden]{display:none!important}
+.scan-enhance-tools summary{cursor:pointer;font-size:13px;font-weight:750;color:#174f81;padding:5px 1px;list-style:revert;user-select:none}
+.scan-enhance-tools summary:focus-visible{outline:3px solid #77a8e0;outline-offset:4px;border-radius:5px}
+.scan-enhance-tools .expand-hint{font-size:11px;color:#6986a4;font-weight:500;margin-left:6px}
+.scan-enhance-inner{margin-top:8px;border-top:1px solid #d4e5f3;padding-top:8px}
+.viewer-enhance-panel{margin:5px 12px;max-height:45dvh;overflow:auto;flex:none}
+.viewer-enhance-actions{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.viewer-enhance-actions[hidden]{display:none!important}
+.viewer-enhance-actions button{padding:8px 10px;font-size:12px}
+.viewer-enhance-actions button.active{background:#1769af;color:#fff}
+.viewer-enhance-panel p{color:#697e93;font-size:11px;margin:5px 0}
+</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script><script src="invoice-photo-enhancer-v1.js?v=20261021-scanner-v3-original1"></script></head><body><div class="app">
+<header class="top"><div><h1>📷 Real Invoice Scanner V3</h1><small>BIG BROTHER · Original First · Optional On-device Document Tools</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
 <div class="filterbar">
  <div><label for="locationFilter">Location</label><select id="locationFilter"><option value="">All permitted locations</option></select></div>
@@ -65,14 +78,17 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div id="pasteTarget" contenteditable="true" tabindex="0" role="textbox" aria-label="Paste clipboard invoice image here" class="paste-target">Tap here, then paste your invoice image</div>
 </div>
 </div>
-<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Photos are enhanced for viewing, while the original file is archived. Up to 12 MB. PDF files are unchanged.</p>
-<div id="scanEnhanceTools" class="scan-enhance-tools" hidden>
-  <div class="scan-enhance-header"><strong>✨ Invoice Scanner V2 · Auto Enhance</strong>
+<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Original photo is always shown first; optional enhancement tools are collapsed until needed. Up to 12 MB. PDF files are unchanged.</p>
+<details id="scanEnhanceTools" class="scan-enhance-tools" hidden>
+  <summary>✨ Photo Enhancement Tools <span class="expand-hint">Tap to expand / collapse</span></summary>
+  <div class="scan-enhance-inner">
+  <div class="scan-enhance-header"><strong>Document preview · Original is archived</strong>
     <span id="scanEnhanceStatus" class="scan-enhance-status" role="status" aria-live="polite"></span></div>
   <div class="scan-enhance-actions" role="group" aria-label="Invoice photo preview mode">
     <button type="button" id="scanViewOriginal" class="alt">Original</button>
     <button type="button" id="scanViewColor" class="active">✨ Enhanced</button>
     <button type="button" id="scanViewBW" class="alt">◐ Black & White</button>
+    <button type="button" id="scanViewScan" class="alt">🧾 Document Clean</button>
     <button type="button" id="scanDownloadEnhanced" class="alt" disabled>↓ Save Enhanced Copy</button>
   </div>
   <div id="scanEnhanceStrengthControl" class="scan-strength-control">
@@ -81,8 +97,9 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
     <div class="scan-strength-marks"><span>Natural</span><span>Clear</span><span>Strong</span></div>
     <div class="scan-strength-hint">Strong may hide faint handwriting. Compare with Original before confirming.</div>
   </div>
-  <p>Enhanced photos are temporary viewing copies made on this device. The original selected photo is saved unchanged for audit evidence. No AI API, extra upload, or additional Supabase storage.</p>
-</div>
+  <p>Document Clean uses stronger background whitening and contrast; pale ink or security marks can fade. Always compare Original before confirming. Enhancements are temporary viewing copies only; no AI API, extra upload or additional Supabase storage.</p>
+  </div>
+</details>
 <div id="preview" class="hint">No photo selected</div>
 <div class="crop-tools"><button type="button" id="editPhoto" class="alt" hidden>✂ Edit / Crop Picture</button><button type="button" id="restorePhoto" class="alt" hidden>Restore selected photo</button></div>
 <div id="photoEditor" class="photo-editor" hidden><p>Rotate or move the photo, then select the crop area. The selected box stays visible until you apply the crop or cancel.</p>
@@ -95,18 +112,28 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
- <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong>
-  <div id="viewerEnhanceActions" class="viewer-enhance-actions" hidden>
-    <button type="button" id="viewerViewOriginal" class="active">Original</button>
-    <button type="button" id="viewerViewColor" class="alt">✨ Enhanced</button>
-    <button type="button" id="viewerViewBW" class="alt">◐ B&W</button>
-  </div>
+ <section class="invoice-viewer-sheet"><div class="invoice-viewer-head">
+  <strong id="invoiceViewerTitle">Original Invoice</strong>
   <button type="button" class="alt" id="invoiceViewerClose">✕ Close</button>
-</div><div id="viewerStrengthControl" class="scan-strength-control viewer-strength-control" hidden>
-  <label for="viewerEnhanceStrength">Enhancement Strength <strong id="viewerEnhanceStrengthLabel">Clear</strong></label>
-  <input id="viewerEnhanceStrength" type="range" min="0" max="2" step="1" value="1" aria-label="Archived invoice viewing strength, Natural, Clear or Strong">
-  <div class="scan-strength-marks"><span>Natural</span><span>Clear</span><span>Strong</span></div>
-</div><div id="viewerEnhanceStatus" class="viewer-enhance-status" role="status" aria-live="polite" hidden></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
+</div>
+<details id="viewerEnhanceTools" class="scan-enhance-tools viewer-enhance-panel" hidden>
+  <summary>✨ Photo Enhancement Tools <span class="expand-hint">Tap to expand / collapse</span></summary>
+  <div class="scan-enhance-inner">
+    <div id="viewerEnhanceActions" class="viewer-enhance-actions" hidden>
+      <button type="button" id="viewerViewOriginal" class="active">Original</button>
+      <button type="button" id="viewerViewColor" class="alt">✨ Enhanced</button>
+      <button type="button" id="viewerViewBW" class="alt">◐ B&W</button>
+      <button type="button" id="viewerViewScan" class="alt">🧾 Document Clean</button>
+    </div>
+    <div id="viewerStrengthControl" class="scan-strength-control viewer-strength-control" hidden>
+      <label for="viewerEnhanceStrength">Enhancement Strength <strong id="viewerEnhanceStrengthLabel">Clear</strong></label>
+      <input id="viewerEnhanceStrength" type="range" min="0" max="2" step="1" value="1" aria-label="Archived invoice viewing strength, Natural, Clear or Strong">
+      <div class="scan-strength-marks"><span>Natural</span><span>Clear</span><span>Strong</span></div>
+    </div>
+    <div id="viewerEnhanceStatus" class="viewer-enhance-status" role="status" aria-live="polite" hidden></div>
+    <p>Document Clean may hide faint writing. No editing or saving of the archived original.</p>
+  </div>
+</details><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
 <div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay playsinline muted aria-hidden="true"></video><canvas id="cameraCanvas" width="710" height="1000" aria-label="Portrait live camera preview; tap the invoice number to focus"></canvas><div class="camera-guide"></div><div id="focusRing" class="focus-ring" hidden></div></div><p id="cameraStatus" aria-live="polite">Tap the invoice number to focus where supported.</p><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button class="alt" type="button" id="cameraFocus">◎ Refocus</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
 <div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div>
@@ -114,6 +141,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
   <button type="button" class="alt" id="confirmViewOriginal">Original</button>
   <button type="button" class="alt" id="confirmViewColor">Enhanced</button>
   <button type="button" class="alt" id="confirmViewBW">B&W</button>
+  <button type="button" class="alt" id="confirmViewScan">Document Clean</button>
 </div>
 <p class="hint">Compare the printed number with the original if handwriting is unclear. Only the unmodified selected photo is archived.</p><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
 <script>
@@ -174,9 +202,10 @@ function clearPhotoEnhancements(){
  photoEnhanceGeneration++;
  for(const item of photoEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
  photoEnhanceVariants.clear();photoEnhanceJobs.clear();photoEnhanceFailed.clear();
- photoEnhanceStrength='clear';$('scanEnhanceStrength').value='1';
+ photoEnhanceMode='original';photoEnhanceStrength='clear';$('scanEnhanceStrength').value='1';
  $('scanEnhanceStrengthLabel').textContent='Clear';$('scanEnhanceStatus').textContent='';
- $('scanEnhanceTools').hidden=true;$('scanDownloadEnhanced').disabled=true;
+ $('scanEnhanceTools').hidden=true;$('scanEnhanceTools').open=false;
+ $('scanDownloadEnhanced').disabled=true;
  $('confirmEnhanceModes').hidden=true;
 }
 function photoPreviewUrl(mode){
@@ -188,7 +217,7 @@ function renderPhotoEnhancement(){
  if(!image||!chosen?.type.startsWith('image/'))return;
  const url=photoPreviewUrl(photoEnhanceMode);
  if(image.src!==url)image.src=url;
- for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW']]){
+ for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW'],['scan','scanViewScan']]){
   $(id).className=photoEnhanceMode===mode?'active':'alt';
   $(id).setAttribute('aria-pressed',photoEnhanceMode===mode?'true':'false');
  }
@@ -202,7 +231,7 @@ function renderPhotoEnhancement(){
  $('scanDownloadEnhanced').disabled=photoEnhanceMode==='original'||!ready;
 }
 async function preparePhotoEnhancement(file,mode,strength=photoEnhanceStrength){
- if(!file?.type.startsWith('image/')||!['color','bw'].includes(mode))return;
+ if(!file?.type.startsWith('image/')||!['color','bw','scan'].includes(mode))return;
  const key=enhanceKey(mode,strength);
  if(photoEnhanceVariants.has(key)||photoEnhanceJobs.has(key)||photoEnhanceFailed.has(key))return;
  // Serialize heavyweight work: only render the last selected slider position.
@@ -235,7 +264,7 @@ async function preparePhotoEnhancement(file,mode,strength=photoEnhanceStrength){
  photoEnhanceJobs.set(key,job);renderPhotoEnhancement();await job;
 }
 function choosePhotoEnhancement(mode){
- if(!['original','color','bw'].includes(mode))return;
+ if(!['original','color','bw','scan'].includes(mode))return;
  photoEnhanceMode=mode;renderPhotoEnhancement();
  if(mode!=='original'&&chosen?.type.startsWith('image/'))
   void preparePhotoEnhancement(chosen,mode,photoEnhanceStrength);
@@ -253,7 +282,7 @@ function setPhotoEnhanceStrength(value){
 function setConfirmPhotoMode(mode){
  const image=$('confirmPhoto').querySelector('img');if(!image)return;
  image.src=photoPreviewUrl(mode);
- for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW']]){
+ for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW'],['scan','confirmViewScan']]){
   $(id).className=mode===key?'active':'alt';
   $(id).disabled=key!=='original'&&!photoEnhanceVariants.has(enhanceKey(key,photoEnhanceStrength));
  }
@@ -262,15 +291,17 @@ $('scanEnhanceStrength').oninput=e=>setPhotoEnhanceStrength(e.target.value);
 $('scanViewOriginal').onclick=()=>choosePhotoEnhancement('original');
 $('scanViewColor').onclick=()=>choosePhotoEnhancement('color');
 $('scanViewBW').onclick=()=>choosePhotoEnhancement('bw');
+$('scanViewScan').onclick=()=>choosePhotoEnhancement('scan');
 $('confirmViewOriginal').onclick=()=>setConfirmPhotoMode('original');
 $('confirmViewColor').onclick=()=>setConfirmPhotoMode('color');
 $('confirmViewBW').onclick=()=>setConfirmPhotoMode('bw');
+$('confirmViewScan').onclick=()=>setConfirmPhotoMode('scan');
 $('scanDownloadEnhanced').onclick=()=>{
  const mode=photoEnhanceMode,asset=photoEnhanceVariants.get(enhanceKey(mode,photoEnhanceStrength));
  if(!asset||!chosen||mode==='original')return;
  const link=document.createElement('a');link.href=asset.url;
  link.download=(clean(selected?.invoiceNo)||'invoice')+
-  (mode==='bw'?'-black-white':'-enhanced')+'-'+photoEnhanceStrength+'.jpg';
+  (mode==='bw'?'-black-white':mode==='scan'?'-document-clean':'-enhanced')+'-'+photoEnhanceStrength+'.jpg';
  document.body.append(link);link.click();link.remove();
 };
 
@@ -579,9 +610,9 @@ function applyChosen(f){
   const img=document.createElement('img');img.src=previewUrl;img.alt='Invoice photo preview';
   $('preview').append(img);
   $('scanEnhanceTools').hidden=false;
-  photoEnhanceMode='color';
-  renderPhotoEnhancement();
-  void preparePhotoEnhancement(f,'color');
+  $('scanEnhanceTools').open=false; // never auto-expand after import or crop
+  photoEnhanceMode='original';
+  renderPhotoEnhancement(); // never auto-process; the user must choose a tool
  }else $('preview').textContent=f?'PDF: '+f.name:'No photo selected';
  $('selectedFileName').textContent=f?'Selected: '+f.name:'No photo selected';
  updateComplete();
@@ -692,6 +723,7 @@ function clearViewerEnhancements(){
  viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerEnhanceFailed.clear();
  viewerOriginalDownload=null;viewerSignedUrl='';viewerMode='original';viewerEnhanceStrength='clear';
  $('viewerEnhanceStrength').value='1';$('viewerEnhanceStrengthLabel').textContent='Clear';
+ $('viewerEnhanceTools').hidden=true;$('viewerEnhanceTools').open=false;
  $('viewerEnhanceActions').hidden=true;$('viewerStrengthControl').hidden=true;
  $('viewerEnhanceStatus').hidden=true;$('viewerEnhanceStatus').textContent='';
 }
@@ -700,7 +732,7 @@ function closeInvoiceViewer(){
  $('invoiceViewer').hidden=true;$('invoiceViewerBody').replaceChildren();
 }
 function renderViewerMode(){
- for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW']]){
+ for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW'],['scan','viewerViewScan']]){
   $(id).className=viewerMode===mode?'active':'alt';
   $(id).setAttribute('aria-pressed',viewerMode===mode?'true':'false');
  }
@@ -718,7 +750,7 @@ function renderViewerMode(){
   :'Preparing '+enhanceLabel(viewerEnhanceStrength)+' view…';
 }
 async function prepareViewerEnhancement(requestId,mode,strength=viewerEnhanceStrength){
- if(!viewerSignedUrl||!['color','bw'].includes(mode)||requestId!==invoiceViewerRequest)return;
+ if(!viewerSignedUrl||!['color','bw','scan'].includes(mode)||requestId!==invoiceViewerRequest)return;
  const key=enhanceKey(mode,strength);
  if(viewerEnhanceVariants.has(key)||viewerEnhanceJobs.has(key)||viewerEnhanceFailed.has(key))return;
  // Do not spawn multiple full-resolution processing jobs on low-memory tablets.
@@ -758,7 +790,7 @@ async function prepareViewerEnhancement(requestId,mode,strength=viewerEnhanceStr
  viewerEnhanceJobs.set(key,job);renderViewerMode();await job;
 }
 function chooseViewerMode(mode){
- if(!['original','color','bw'].includes(mode)||!viewerSignedUrl)return;
+ if(!['original','color','bw','scan'].includes(mode)||!viewerSignedUrl)return;
  viewerMode=mode;renderViewerMode();
  if(mode!=='original')void prepareViewerEnhancement(invoiceViewerRequest,mode,viewerEnhanceStrength);
 }
@@ -776,6 +808,7 @@ $('viewerEnhanceStrength').oninput=e=>setViewerEnhanceStrength(e.target.value);
 $('viewerViewOriginal').onclick=()=>chooseViewerMode('original');
 $('viewerViewColor').onclick=()=>chooseViewerMode('color');
 $('viewerViewBW').onclick=()=>chooseViewerMode('bw');
+$('viewerViewScan').onclick=()=>chooseViewerMode('scan');
 async function view(r){
  const requestId=++invoiceViewerRequest;
  clearViewerEnhancements();
@@ -806,11 +839,13 @@ async function view(r){
   $('invoiceViewerBody').replaceChildren(media);
   if(!isPDF){
    viewerSignedUrl=signed;
-   viewerMode='color';
+   viewerMode='original';
+   $('viewerEnhanceTools').hidden=false;
+   $('viewerEnhanceTools').open=false; // private originals start untouched
    $('viewerEnhanceActions').hidden=false;
    $('viewerStrengthControl').hidden=false;
    $('viewerEnhanceStatus').hidden=false;
-   void prepareViewerEnhancement(requestId,'color',viewerEnhanceStrength);
+   renderViewerMode(); // no photo processing or second private read on opening
   }
  }catch(error){
   if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(

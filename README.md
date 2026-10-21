@@ -4,52 +4,80 @@ Private original paper-invoice attachments for the invoice generator and pending
 
 Documents belong in the private Supabase Storage bucket, never in GitHub. Invoices are identified by internal `invoice_id`, not the duplicate-prone display invoice number.
 
-## Invoice Scanner V2 — Auto Enhance (2026-10-21)
+## Invoice Scanner V3 — Original First and Collapsible Enhancement (2026-10-21)
 
-- **No AI API and no extra cost per image**: all color/B&W enhancement runs inside the staff browser using standard Canvas and JavaScript; no CDN or third-party editor dependency.
-- **Auto-preview on all photo paths**: live camera, selected JPG/PNG/WebP, pasted screenshots, and existing manually cropped photos. Staff can switch Original / Enhanced / Black & White, and download the generated temporary copy if needed.
-- **Uploaded History**: signed authorized invoice photo displays enhanced by default, with a one-click Original or B&W viewer. One temporary private read is reused for both computed viewing modes.
-- **Audit protection**: the existing registration and replacement RPCs are unchanged, and the scanner still uploads the original **selected** Blob as-is. Enhancements are computed from that selected Blob, not saved to the private invoice bucket; no secondary image, DB row or retention exception is created. Manual crop/rotate remains an explicit user edit of the selected source before upload, as previously.
-- **Invoice number security**: manual printed-number confirmation remains unchanged; this release does not add generative OCR or infer any text. No AI attempts to reconstruct unreadable details.
-- **PDF**: existing upload and viewer are unchanged; only image MIME types receive enhancement controls.
-- **Mobile**: process a capped 2400-pixel preview to limit memory and CPU; source photo resolution in private storage remains untouched.
-- **Failure**: if decoding/enhancement or signed-url reading fails, the original remains available, with a visible error; enhancement never blocks the Complete/Replace operation.
-- **Local Brain**: no SQL migrations or table changes. Sync the Scanner repository code (including the new `invoice-photo-enhancer-v1.js`) using the existing Control Center V3.4 Code Sync. Windows deployment/device testing must be checked by the operator; Cloud-to-Local business data sync is unnecessary.
+Staff feedback: the earlier code-based Auto Enhance was not nearly as effective as
+AI image editing, and automatic processing after importing photos was unwanted.
 
-### Enhancement Strength (Natural / Clear / Strong)
+### Intended behavior
 
-The upload photo preview and authorized Uploaded History viewer now provide a
-three-position **Enhancement Strength** slider:
+- **Original first, always**: after **camera capture, select photo, paste, crop
+  confirmation, or restore**, display the current selected original image
+  immediately. **Do not start enhancement** or spend CPU on image processing.
+- **Enhancement tools collapsed by default**: the **Photo Enhancement Tools**
+  disclosure stays closed after each image selection. Opening the disclosure
+  alone does not run processing.
+- **Manual modes only**: Original, Enhanced Color, Black & White, or the new
+  **Document Clean** high-contrast document-paper mode. Clicking an enhancement
+  button is the first event that can request processing.
+- **Uploaded History**: authorized private invoice pictures also start in
+  **Original** with their enhancement disclosure closed. Opening it alone
+  does not fetch an additional image or run Canvas; selecting a processing
+  mode does so locally, after the usual short-lived signed URL was issued.
+- **Natural / Clear / Strong**: three adjustable strengths remain available
+  inside the open disclosure. Clear is the default slider setting, **not** an
+  instruction to automatically enhance a newly imported image.
+- **Optional enhanced download**: save a viewing copy manually to the device;
+  there is no additional Supabase image or attachment.
+- **Document Clean**: estimates local paper brightness and normalizes the
+  background toward white, producing a more dramatic scanned-paper look than
+  brightness alone. It is **not AI**, does not read/write amounts, and cannot
+  recover missing photographic detail. Faint pencil strokes, pale ink, stamps,
+  or security-paper patterns can be lost in this viewing mode. Staff should
+  always compare against Original when confirming an invoice.
 
-- **Natural** — gentle V2-style lighting, ink contrast, and bounded sharpening.
-- **Clear (default)** — visibly stronger cleanup of dark pages and handwritten
-  text than V2, while retaining original ink colors.
-- **Strong** — higher contrast, brightness, local shadow correction and still
-  capped sharpening. It can wash out pale pencil and fine marks; compare with
-  **Original** before confirming any invoice number.
+### Accounting and technical protections
 
-Strength changes are preview-only. Results are cached by photo, viewing mode,
-and strength (e.g. `color:strong`). Only one enhancement job runs at a time:
-rapid slider movement processes the latest selected level instead of generating
-all intermediate previews. Cached Blob URLs are revoked when an invoice photo
-changes or its modal closes. Each fresh photo/history viewer starts on **Clear**.
+- **Audit evidence**: the normal upload still sends exactly `body:chosen`,
+  the original **selected** Blob, to private Supabase Storage. Processing
+  variants remain in temporary browser memory. If the user deliberately
+  performs an existing manual crop/rotation, that explicitly edited selection
+  is still used as before; this feature does not change crop policy.
+- **Invoice number**: the existing staff-entered, securely verified printed
+  invoice-number confirmation is untouched. No generative OCR, no fabricated
+  digits, no payment, stock, A/R or invoice database changes.
+- **PDF uploads and history**: existing behavior preserved, no enhancement panel.
+- **Performance**: 2400-pixel preview cap; one active enhancement job per
+  modal; rapid slider changes queue the latest selected mode/strength. When
+  switching images or closing viewers, temporary Blob URLs are revoked.
+- **Costs**: no paid AI API or external enhancement service. Browser-only
+  JavaScript Canvas processing, no additional per-image service charge.
+- **Failure**: if processing is unsupported or fails, the user can still
+  inspect and upload the original without losing any data.
 
-Changing strength never changes `chosen` (the Blob uploaded to Supabase),
-the verified invoice number, the private original record, permissions, paid
-amounts, or OCR. The signed private original is fetched only once for all
-strengths during an Uploaded History viewing session. PDF uploads and previews
-remain outside this enhancement feature.
+### Deployment
 
-**Local Brain:** Existing Code Sync of the scanner's updated `index.html`
-and `invoice-photo-enhancer-v1.js` is sufficient. No SQL migration or
-Cloud-to-Local business-data sync is necessary. Device/browser acceptance
-testing is still needed after code deployment.
+Cloud source repository: `angsokhey11-cloud/big-brother-real-invoice`.
+
+Windows Local Brain requires the existing **Control Center V3.4 → Code Sync**
+to update `index.html` and `invoice-photo-enhancer-v1.js`. **No Code SQL
+Migration** and no Cloud-to-Local business-data synchronization needed.
 
 Repeatable synthetic-only browser tests: [tests/invoice-enhancer.test.html](tests/invoice-enhancer.test.html).
 
 ### Practical acceptance test
 
-1. In Pending Scan, choose a handwritten invoice photo. Wait for Enhanced preview; check Original / Enhanced / B&W.
-2. Confirm the printed number; check that the original photo, not enhanced copy, remains the private archive.
-3. In Uploaded History, open the invoice; Enhanced appears by default and Original still matches the source.
-4. On phone/tablet repeat camera capture, clipboard paste, Crop / Restore, and PDF upload. No changes should appear in unrelated invoices, payments or stock.
+1. Pending Scan: select or capture a photo. **Original** displays; tool panel
+   is **collapsed**; no enhancement starts.
+2. Expand **Photo Enhancement Tools**. The original remains unchanged.
+   Select **Document Clean**, then compare with **Original**, **Enhanced
+   Color**, and **B&W**. Change Natural/Clear/Strong.
+3. Confirm the printed number and upload. Verify the private archived photo
+   still equals the original selected photo, not any processed variant.
+4. Uploaded History: opening a photo displays Original with tools collapsed.
+   Only manually clicking a mode triggers enhancement; PDF has no such panel.
+5. Verify on tablet and desktop, including camera, clipboard, manual crop,
+   restore, signed-image viewing and closing the modal mid-processing.
+
+Automated code tests do not replace signed-in live browser and Local Brain
+device acceptance testing.
