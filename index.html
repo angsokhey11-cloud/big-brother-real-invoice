@@ -631,30 +631,125 @@ async function upload(){
   if(/number does not match/i.test(e.message))$('typedInvoice').value='';
  }finally{busy=false;$('confirmSubmit').disabled=false;updateComplete()}
 }
-let invoiceViewerRequest=0;
+let invoiceViewerRequest=0,viewerSignedUrl='',viewerMode='original';
+let viewerEnhanceVariants=new Map(),viewerEnhanceJobs=new Map(),viewerOriginalDownload=null;
+function clearViewerEnhancements(){
+ for(const item of viewerEnhanceVariants.values())URL.revokeObjectURL(item.url);
+ viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerOriginalDownload=null;
+ viewerSignedUrl='';viewerMode='original';
+ $('viewerEnhanceActions').hidden=true;
+ $('viewerEnhanceStatus').hidden=true;$('viewerEnhanceStatus').textContent='';
+}
 function closeInvoiceViewer(){
  invoiceViewerRequest++;
+ clearViewerEnhancements();
  $('invoiceViewer').hidden=true;
  $('invoiceViewerBody').replaceChildren();
 }
+function renderViewerMode(){
+ for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW']]){
+  $(id).className=viewerMode===mode?'active':'alt';
+  $(id).setAttribute('aria-pressed',viewerMode===mode?'true':'false');
+ }
+ const img=$('invoiceViewerBody').querySelector('img');
+ if(!img||!viewerSignedUrl)return;
+ img.src=viewerMode==='original'?viewerSignedUrl:
+  (viewerEnhanceVariants.get(viewerMode)?.url||viewerSignedUrl);
+ const ready=viewerEnhanceVariants.has(viewerMode);
+ $('viewerEnhanceStatus').textContent=viewerMode==='original'
+  ?'Viewing private original invoice'
+  :ready?'Enhanced locally for viewing. The private original remains unchanged.'
+  :'Preparing on-device enhancement… original displayed in the meantime.';
+}
+async function prepareViewerEnhancement(requestId,mode){
+ if(!viewerSignedUrl||!['color','bw'].includes(mode)||requestId!==invoiceViewerRequest)return;
+ if(viewerEnhanceVariants.has(mode)||viewerEnhanceJobs.has(mode))return;
+ if(typeof window.BBInvoiceEnhancerV1?.enhance!=='function'){
+  $('viewerEnhanceStatus').textContent='Enhancer unavailable. Original photo is still available.';return;
+ }
+ const signed=viewerSignedUrl;
+ const job=(async()=>{
+  try{
+   // The signed URL is for an already-authorized private original.
+   // Fetch once; no second storage object or A/R database record is created.
+   if(!viewerOriginalDownload)viewerOriginalDownload=fetch(signed,{cache:'no-store'})
+     .then(response=>{
+      if(!response.ok)throw Error('Could not load original photo for local enhancement.');
+      return response.blob();
+     });
+   let original=await viewerOriginalDownload;
+   if(requestId!==invoiceViewerRequest)return;
+   if(!original.type.startsWith('image/')){
+    original=new Blob([original],{type:'image/jpeg'});
+   }
+   const enhanced=await window.BBInvoiceEnhancerV1.enhance(original,mode);
+   if(requestId!==invoiceViewerRequest)return;
+   viewerEnhanceVariants.set(mode,{url:URL.createObjectURL(enhanced.blob),blob:enhanced.blob});
+  }catch(error){
+   if(requestId===invoiceViewerRequest){
+    viewerOriginalDownload=null;
+    $('viewerEnhanceStatus').textContent='Enhanced view unavailable: '+
+      (error?.message||'Use Original.');
+   }
+  }finally{
+   if(requestId===invoiceViewerRequest){
+    viewerEnhanceJobs.delete(mode);
+    if(viewerEnhanceVariants.has(mode))renderViewerMode();
+   }
+  }
+ })();
+ viewerEnhanceJobs.set(mode,job);
+ renderViewerMode();
+ await job;
+}
+function chooseViewerMode(mode){
+ if(!['original','color','bw'].includes(mode)||!viewerSignedUrl)return;
+ viewerMode=mode;renderViewerMode();
+ if(mode!=='original')void prepareViewerEnhancement(invoiceViewerRequest,mode);
+}
+$('viewerViewOriginal').onclick=()=>chooseViewerMode('original');
+$('viewerViewColor').onclick=()=>chooseViewerMode('color');
+$('viewerViewBW').onclick=()=>chooseViewerMode('bw');
 async function view(r){
  const requestId=++invoiceViewerRequest;
+ clearViewerEnhancements();
  $('invoiceViewerTitle').textContent=(r.customer||'Customer')+' · '+(r.invoiceNo||'Original invoice');
- $('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:'Opening private original…'}));
+ $('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{
+  className:'hint',textContent:'Opening private original…'
+ }));
  $('invoiceViewer').hidden=false;
  try{
   const t=await token();
-  const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});
-  const data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');
+  const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{
+   method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},
+   body:JSON.stringify({expiresIn:120})
+  });
+  const data=await response.json();
+  if(!response.ok)throw Error(data.message||'Cannot open private original');
   if(requestId!==invoiceViewerRequest)return;
   const signed=data.signedURL.startsWith('http')?data.signedURL:URL+'/storage/v1'+data.signedURL;
   const isPDF=/pdf/i.test(r.mime||r.mimeType||r.mime_type||'')||/\.pdf(?:$|[?#])/i.test(r.path||'');
   const media=document.createElement(isPDF?'iframe':'img');
   media.src=signed;
   if(isPDF)media.title='Original invoice PDF';else media.alt='Original invoice: '+(r.invoiceNo||'');
-  media.onerror=()=>{if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:'Preview unavailable. Close and try again.'}))};
+  media.onerror=()=>{
+   if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(
+    Object.assign(document.createElement('p'),{className:'hint',textContent:'Preview unavailable. Close and try again.'})
+   );
+  };
   $('invoiceViewerBody').replaceChildren(media);
- }catch(e){if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:e.message||'Cannot open original invoice.'}))}
+  if(!isPDF){
+   viewerSignedUrl=signed;
+   viewerMode='color';
+   $('viewerEnhanceActions').hidden=false;
+   $('viewerEnhanceStatus').hidden=false;
+   void prepareViewerEnhancement(requestId,'color');
+  }
+ }catch(error){
+  if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(
+   Object.assign(document.createElement('p'),{className:'hint',textContent:error.message||'Cannot open original invoice.'})
+  );
+ }
 }
 $('invoiceViewerClose').onclick=closeInvoiceViewer;
 $('invoiceViewer').addEventListener('click',e=>{if(e.target===$('invoiceViewer'))closeInvoiceViewer()});
