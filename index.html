@@ -14,8 +14,29 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}.invoice-viewer-body iframe{display:block;width:100%;height:100%;border:0;background:white}.invoice-viewer-body .hint{padding:15px}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
 .photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:min(100%,calc(55dvh * 0.71));height:auto;aspect-ratio:426 / 600;touch-action:none;background:#eaf0f6;cursor:grab}.photo-editor canvas:active{cursor:grabbing}.photo-editor p{font-size:12px;color:#5e7690}.photo-editor canvas{max-width:430px;margin:auto;border:0}.photo-editor label{display:flex;justify-content:space-between;font-weight:700;margin:10px 0 3px}.photo-editor input[type=range]{width:100%;accent-color:#1769af}.photo-editor .buttons{justify-content:center;gap:6px}.photo-editor .buttons button{flex:1}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel{justify-content:center;padding:10px;gap:8px}.camera-panel video{display:block;width:100%;height:100%;object-fit:cover}.camera-stage{position:relative;flex:none;width:min(100%,calc((100dvh - 165px)* .71),510px);max-height:calc(100dvh - 165px);aspect-ratio:.71;min-height:0;overflow:hidden;border-radius:12px;background:#101b24}.camera-stage video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.camera-stage #cameraCanvas{display:block;width:100%;height:100%;object-fit:fill}.camera-guide{position:absolute;inset:4%;border:3px solid #ffbb42;border-radius:8px;box-shadow:0 0 0 200vmax #07111a65;pointer-events:none}.camera-panel .buttons{flex-shrink:0;display:flex;justify-content:center}.camera-panel .buttons button{min-height:46px}.camera-panel #cameraStatus{font-size:12px;text-align:center;max-width:94%;margin:0}.camera-panel .focus-ring{position:absolute;width:65px;height:65px;border:2px solid #ffdb62;border-radius:10px;box-shadow:0 0 8px #0b192b;transform:translate(-50%,-50%);pointer-events:none}.camera-panel .focus-ring[hidden]{display:none}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
-</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script></head><body><div class="app">
-<header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
+
+/* Invoice Scanner V2: temporary on-device preview, never overwrites archive. */
+.scan-enhance-tools{margin:10px 0 12px;padding:11px;border:1px solid #bdd7ed;border-radius:11px;background:#f3f9ff}
+.scan-enhance-tools[hidden],.scan-enhance-confirm[hidden]{display:none!important}
+.scan-enhance-header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.scan-enhance-header strong{font-size:13px;color:#185b86}
+.scan-enhance-status{font-size:12px;color:#42688a;min-height:18px}
+.scan-enhance-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:9px 0}
+.scan-enhance-actions button{padding:9px 11px;font-size:12px}
+.scan-enhance-actions button.active{background:#1769af;color:#fff}
+.scan-enhance-actions button.alt{background:#e2eff9;color:#184b74}
+.scan-enhance-tools p{margin:6px 0 0;color:#607c98;font-size:11px;line-height:1.5}
+#preview img{display:block;max-width:100%;max-height:39dvh;object-fit:contain;border-radius:8px;margin:6px auto}
+.scan-enhance-confirm{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;margin:7px 0}
+.scan-enhance-confirm button{padding:7px 10px;font-size:12px}
+.invoice-viewer-head .viewer-enhance-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.invoice-viewer-head .viewer-enhance-actions[hidden]{display:none}
+.invoice-viewer-head .viewer-enhance-actions button{padding:7px 9px;font-size:12px}
+.invoice-viewer-head .viewer-enhance-actions .active{background:#1769af;color:#fff}
+.viewer-enhance-status{font-size:11px;color:#516b88;padding:2px 12px;text-align:center}
+@media(max-width:560px){.invoice-viewer-head{flex-wrap:wrap}.invoice-viewer-head .viewer-enhance-actions{order:3;width:100%;justify-content:center}}
+</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script><script src="invoice-photo-enhancer-v1.js?v=20261021-scanner-v2-photo1"></script></head><body><div class="app">
+<header class="top"><div><h1>📷 Real Invoice Scanner V2</h1><small>BIG BROTHER · On-device Auto Enhance · Original paper archived</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
 <div class="filterbar">
  <div><label for="locationFilter">Location</label><select id="locationFilter"><option value="">All permitted locations</option></select></div>
@@ -35,7 +56,18 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div id="pasteTarget" contenteditable="true" tabindex="0" role="textbox" aria-label="Paste clipboard invoice image here" class="paste-target">Tap here, then paste your invoice image</div>
 </div>
 </div>
-<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Up to 12 MB. PDF files remain available without photo cropping.</p>
+<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Photos are enhanced for viewing, while the original file is archived. Up to 12 MB. PDF files are unchanged.</p>
+<div id="scanEnhanceTools" class="scan-enhance-tools" hidden>
+  <div class="scan-enhance-header"><strong>✨ Invoice Scanner V2 · Auto Enhance</strong>
+    <span id="scanEnhanceStatus" class="scan-enhance-status" role="status" aria-live="polite"></span></div>
+  <div class="scan-enhance-actions" role="group" aria-label="Invoice photo preview mode">
+    <button type="button" id="scanViewOriginal" class="alt">Original</button>
+    <button type="button" id="scanViewColor" class="active">✨ Enhanced</button>
+    <button type="button" id="scanViewBW" class="alt">◐ Black & White</button>
+    <button type="button" id="scanDownloadEnhanced" class="alt" disabled>↓ Save Enhanced Copy</button>
+  </div>
+  <p>Enhanced photos are temporary viewing copies made on this device. The original selected photo is saved unchanged for audit evidence. No AI API, extra upload, or additional Supabase storage.</p>
+</div>
 <div id="preview" class="hint">No photo selected</div>
 <div class="crop-tools"><button type="button" id="editPhoto" class="alt" hidden>✂ Edit / Crop Picture</button><button type="button" id="restorePhoto" class="alt" hidden>Restore selected photo</button></div>
 <div id="photoEditor" class="photo-editor" hidden><p>Rotate or move the photo, then select the crop area. The selected box stays visible until you apply the crop or cancel.</p>
@@ -48,10 +80,23 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
- <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong><button type="button" class="alt" id="invoiceViewerClose">✕ Close</button></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
+ <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong>
+  <div id="viewerEnhanceActions" class="viewer-enhance-actions" hidden>
+    <button type="button" id="viewerViewOriginal" class="active">Original</button>
+    <button type="button" id="viewerViewColor" class="alt">✨ Enhanced</button>
+    <button type="button" id="viewerViewBW" class="alt">◐ B&W</button>
+  </div>
+  <button type="button" class="alt" id="invoiceViewerClose">✕ Close</button>
+</div><div id="viewerEnhanceStatus" class="viewer-enhance-status" role="status" aria-live="polite" hidden></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
 <div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay playsinline muted aria-hidden="true"></video><canvas id="cameraCanvas" width="710" height="1000" aria-label="Portrait live camera preview; tap the invoice number to focus"></canvas><div class="camera-guide"></div><div id="focusRing" class="focus-ring" hidden></div></div><p id="cameraStatus" aria-live="polite">Tap the invoice number to focus where supported.</p><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button class="alt" type="button" id="cameraFocus">◎ Refocus</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
-<div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
+<div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div>
+<div id="confirmEnhanceModes" class="scan-enhance-confirm" hidden>
+  <button type="button" class="alt" id="confirmViewOriginal">Original</button>
+  <button type="button" class="alt" id="confirmViewColor">Enhanced</button>
+  <button type="button" class="alt" id="confirmViewBW">B&W</button>
+</div>
+<p class="hint">Compare the printed number with the original if handwriting is unclear. Only the unmodified selected photo is archived.</p><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
 <script>
 (()=>{
 'use strict';
@@ -100,6 +145,82 @@ function normalizedInvoice(v){
  if(!/^[0-9]{1,10}$/.test(text))return null;
  return text.replace(/^0+/,'')||'0';
 }
+// Invoice Scanner V2 — local-only preview. The selected file is always archived unchanged.
+let photoEnhanceGeneration=0,photoEnhanceMode='color',photoEnhanceVariants=new Map(),photoEnhanceJobs=new Map();
+function clearPhotoEnhancements(){
+ photoEnhanceGeneration++;
+ for(const item of photoEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
+ photoEnhanceVariants.clear();photoEnhanceJobs.clear();
+ $('scanEnhanceStatus').textContent='';
+ $('scanEnhanceTools').hidden=true;
+ $('scanDownloadEnhanced').disabled=true;
+ $('confirmEnhanceModes').hidden=true;
+}
+function photoPreviewUrl(mode){return mode==='original'?previewUrl:(photoEnhanceVariants.get(mode)?.url||previewUrl)}
+function renderPhotoEnhancement(){
+ const image=$('preview').querySelector('img');
+ if(!image||!chosen?.type.startsWith('image/'))return;
+ image.src=photoPreviewUrl(photoEnhanceMode);
+ for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW']]){
+  $(id).className=photoEnhanceMode===mode?'active':'alt';
+  $(id).setAttribute('aria-pressed',photoEnhanceMode===mode?'true':'false');
+ }
+ const ready=photoEnhanceVariants.has(photoEnhanceMode),working=photoEnhanceJobs.has(photoEnhanceMode);
+ $('scanEnhanceStatus').textContent=photoEnhanceMode==='original'?'Original selected photo · audit source':
+  ready?'Enhanced locally · archived original unchanged':
+  working?'Enhancing locally… showing original while processing':'Preparing document view…';
+ $('scanDownloadEnhanced').disabled=!photoEnhanceVariants.has(photoEnhanceMode==='bw'?'bw':'color');
+}
+async function preparePhotoEnhancement(file,mode){
+ if(!file?.type.startsWith('image/')||!['color','bw'].includes(mode))return;
+ if(photoEnhanceVariants.has(mode)||photoEnhanceJobs.has(mode))return;
+ if(typeof window.BBInvoiceEnhancerV1?.enhance!=='function'){
+  $('scanEnhanceStatus').textContent='Enhancer unavailable; original photo remains usable.';return;
+ }
+ const generation=photoEnhanceGeneration;
+ const job=(async()=>{
+  try{
+   const result=await window.BBInvoiceEnhancerV1.enhance(file,mode);
+   if(generation!==photoEnhanceGeneration||chosen!==file)return;
+   photoEnhanceVariants.set(mode,{url:window.URL.createObjectURL(result.blob),blob:result.blob});
+  }catch(error){
+   if(generation===photoEnhanceGeneration)
+    $('scanEnhanceStatus').textContent='Enhancement unavailable: '+(error?.message||'use original');
+  }finally{
+   if(generation===photoEnhanceGeneration){photoEnhanceJobs.delete(mode);renderPhotoEnhancement()}
+  }
+ })();
+ photoEnhanceJobs.set(mode,job);
+ renderPhotoEnhancement();
+ await job;
+}
+function choosePhotoEnhancement(mode){
+ if(!['original','color','bw'].includes(mode))return;
+ photoEnhanceMode=mode;renderPhotoEnhancement();
+ if(mode!=='original'&&chosen?.type.startsWith('image/'))void preparePhotoEnhancement(chosen,mode);
+}
+function setConfirmPhotoMode(mode){
+ const image=$('confirmPhoto').querySelector('img');if(!image)return;
+ image.src=photoPreviewUrl(mode);
+ for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW']]){
+  $(id).className=mode===key?'active':'alt';
+  $(id).disabled=key!=='original'&&!photoEnhanceVariants.has(key);
+ }
+}
+$('scanViewOriginal').onclick=()=>choosePhotoEnhancement('original');
+$('scanViewColor').onclick=()=>choosePhotoEnhancement('color');
+$('scanViewBW').onclick=()=>choosePhotoEnhancement('bw');
+$('confirmViewOriginal').onclick=()=>setConfirmPhotoMode('original');
+$('confirmViewColor').onclick=()=>setConfirmPhotoMode('color');
+$('confirmViewBW').onclick=()=>setConfirmPhotoMode('bw');
+$('scanDownloadEnhanced').onclick=()=>{
+ const key=photoEnhanceMode==='bw'?'bw':'color',asset=photoEnhanceVariants.get(key);
+ if(!asset||!chosen)return;
+ const link=document.createElement('a');link.href=asset.url;
+ link.download=(clean(selected?.invoiceNo)||'invoice')+(key==='bw'?'-black-white':'-enhanced')+'.jpg';
+ document.body.append(link);link.click();link.remove();
+};
+
 // The preview canvas is only for display. Capture directly from the
 // maximum-resolution live video frame to avoid the old 710x1000 limitation.
 // Browsers cannot promise the phone's native camera-app still-photo quality.
@@ -383,13 +504,19 @@ function showConfirm(){
  $('confirmPhoto').replaceChildren();
  if(chosen.type.startsWith('image/')){
   const img=document.createElement('img');img.alt='Photo to inspect and confirm';
-  img.src=previewUrl;$('confirmPhoto').append(img);
- }else $('confirmPhoto').textContent='Selected PDF: '+chosen.name+' — review your paper invoice before continuing.';
+  img.src=photoPreviewUrl(photoEnhanceMode);$('confirmPhoto').append(img);
+  $('confirmEnhanceModes').hidden=false;
+  setConfirmPhotoMode(photoEnhanceVariants.has(photoEnhanceMode)?photoEnhanceMode:'original');
+ }else{
+  $('confirmEnhanceModes').hidden=true;
+  $('confirmPhoto').textContent='Selected PDF: '+chosen.name+' — review your paper invoice before continuing.';
+ }
  $('modal').hidden=true;$('confirmModal').hidden=false;$('typedInvoice').focus();
 }
 $('confirmBack').onclick=()=>{$('confirmModal').hidden=true;$('modal').hidden=false};
 $('typedInvoice').addEventListener('keydown',e=>{if(e.key==='Enter')$('confirmSubmit').click()});
 function applyChosen(f){
+ clearPhotoEnhancements();
  chosen=f;
  if(previewUrl)window.URL.revokeObjectURL(previewUrl);
  previewUrl=f?window.URL.createObjectURL(f):'';
@@ -397,6 +524,10 @@ function applyChosen(f){
  if(f?.type.startsWith('image/')){
   const img=document.createElement('img');img.src=previewUrl;img.alt='Invoice photo preview';
   $('preview').append(img);
+  $('scanEnhanceTools').hidden=false;
+  photoEnhanceMode='color';
+  renderPhotoEnhancement();
+  void preparePhotoEnhancement(f,'color');
  }else $('preview').textContent=f?'PDF: '+f.name:'No photo selected';
  $('selectedFileName').textContent=f?'Selected: '+f.name:'No photo selected';
  updateComplete();
@@ -456,6 +587,7 @@ function close(){
  if(busy)return;
  stopCamera();$('confirmModal').hidden=true;$('modal').hidden=true;
  selected=null;chosen=null;sourcePhoto=null;
+ clearPhotoEnhancements();
  if(previewUrl){window.URL.revokeObjectURL(previewUrl);previewUrl=''}
  if(editorBitmap){editorBitmap.close();editorBitmap=null}
 }
@@ -499,30 +631,125 @@ async function upload(){
   if(/number does not match/i.test(e.message))$('typedInvoice').value='';
  }finally{busy=false;$('confirmSubmit').disabled=false;updateComplete()}
 }
-let invoiceViewerRequest=0;
+let invoiceViewerRequest=0,viewerSignedUrl='',viewerMode='original';
+let viewerEnhanceVariants=new Map(),viewerEnhanceJobs=new Map(),viewerOriginalDownload=null;
+function clearViewerEnhancements(){
+ for(const item of viewerEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
+ viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerOriginalDownload=null;
+ viewerSignedUrl='';viewerMode='original';
+ $('viewerEnhanceActions').hidden=true;
+ $('viewerEnhanceStatus').hidden=true;$('viewerEnhanceStatus').textContent='';
+}
 function closeInvoiceViewer(){
  invoiceViewerRequest++;
+ clearViewerEnhancements();
  $('invoiceViewer').hidden=true;
  $('invoiceViewerBody').replaceChildren();
 }
+function renderViewerMode(){
+ for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW']]){
+  $(id).className=viewerMode===mode?'active':'alt';
+  $(id).setAttribute('aria-pressed',viewerMode===mode?'true':'false');
+ }
+ const img=$('invoiceViewerBody').querySelector('img');
+ if(!img||!viewerSignedUrl)return;
+ img.src=viewerMode==='original'?viewerSignedUrl:
+  (viewerEnhanceVariants.get(viewerMode)?.url||viewerSignedUrl);
+ const ready=viewerEnhanceVariants.has(viewerMode);
+ $('viewerEnhanceStatus').textContent=viewerMode==='original'
+  ?'Viewing private original invoice'
+  :ready?'Enhanced locally for viewing. The private original remains unchanged.'
+  :'Preparing on-device enhancement… original displayed in the meantime.';
+}
+async function prepareViewerEnhancement(requestId,mode){
+ if(!viewerSignedUrl||!['color','bw'].includes(mode)||requestId!==invoiceViewerRequest)return;
+ if(viewerEnhanceVariants.has(mode)||viewerEnhanceJobs.has(mode))return;
+ if(typeof window.BBInvoiceEnhancerV1?.enhance!=='function'){
+  $('viewerEnhanceStatus').textContent='Enhancer unavailable. Original photo is still available.';return;
+ }
+ const signed=viewerSignedUrl;
+ const job=(async()=>{
+  try{
+   // The signed URL is for an already-authorized private original.
+   // Fetch once; no second storage object or A/R database record is created.
+   if(!viewerOriginalDownload)viewerOriginalDownload=fetch(signed,{cache:'no-store'})
+     .then(response=>{
+      if(!response.ok)throw Error('Could not load original photo for local enhancement.');
+      return response.blob();
+     });
+   let original=await viewerOriginalDownload;
+   if(requestId!==invoiceViewerRequest)return;
+   if(!original.type.startsWith('image/')){
+    original=new Blob([original],{type:'image/jpeg'});
+   }
+   const enhanced=await window.BBInvoiceEnhancerV1.enhance(original,mode);
+   if(requestId!==invoiceViewerRequest)return;
+   viewerEnhanceVariants.set(mode,{url:window.URL.createObjectURL(enhanced.blob),blob:enhanced.blob});
+  }catch(error){
+   if(requestId===invoiceViewerRequest){
+    viewerOriginalDownload=null;
+    $('viewerEnhanceStatus').textContent='Enhanced view unavailable: '+
+      (error?.message||'Use Original.');
+   }
+  }finally{
+   if(requestId===invoiceViewerRequest){
+    viewerEnhanceJobs.delete(mode);
+    if(viewerEnhanceVariants.has(mode))renderViewerMode();
+   }
+  }
+ })();
+ viewerEnhanceJobs.set(mode,job);
+ renderViewerMode();
+ await job;
+}
+function chooseViewerMode(mode){
+ if(!['original','color','bw'].includes(mode)||!viewerSignedUrl)return;
+ viewerMode=mode;renderViewerMode();
+ if(mode!=='original')void prepareViewerEnhancement(invoiceViewerRequest,mode);
+}
+$('viewerViewOriginal').onclick=()=>chooseViewerMode('original');
+$('viewerViewColor').onclick=()=>chooseViewerMode('color');
+$('viewerViewBW').onclick=()=>chooseViewerMode('bw');
 async function view(r){
  const requestId=++invoiceViewerRequest;
+ clearViewerEnhancements();
  $('invoiceViewerTitle').textContent=(r.customer||'Customer')+' · '+(r.invoiceNo||'Original invoice');
- $('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:'Opening private original…'}));
+ $('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{
+  className:'hint',textContent:'Opening private original…'
+ }));
  $('invoiceViewer').hidden=false;
  try{
   const t=await token();
-  const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:120})});
-  const data=await response.json();if(!response.ok)throw Error(data.message||'Cannot open private original');
+  const response=await fetch(URL+'/storage/v1/object/sign/'+BUCKET+'/'+encodeURIComponent(r.path).replace('%2F','/'),{
+   method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},
+   body:JSON.stringify({expiresIn:120})
+  });
+  const data=await response.json();
+  if(!response.ok)throw Error(data.message||'Cannot open private original');
   if(requestId!==invoiceViewerRequest)return;
   const signed=data.signedURL.startsWith('http')?data.signedURL:URL+'/storage/v1'+data.signedURL;
   const isPDF=/pdf/i.test(r.mime||r.mimeType||r.mime_type||'')||/\.pdf(?:$|[?#])/i.test(r.path||'');
   const media=document.createElement(isPDF?'iframe':'img');
   media.src=signed;
   if(isPDF)media.title='Original invoice PDF';else media.alt='Original invoice: '+(r.invoiceNo||'');
-  media.onerror=()=>{if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:'Preview unavailable. Close and try again.'}))};
+  media.onerror=()=>{
+   if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(
+    Object.assign(document.createElement('p'),{className:'hint',textContent:'Preview unavailable. Close and try again.'})
+   );
+  };
   $('invoiceViewerBody').replaceChildren(media);
- }catch(e){if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(Object.assign(document.createElement('p'),{className:'hint',textContent:e.message||'Cannot open original invoice.'}))}
+  if(!isPDF){
+   viewerSignedUrl=signed;
+   viewerMode='color';
+   $('viewerEnhanceActions').hidden=false;
+   $('viewerEnhanceStatus').hidden=false;
+   void prepareViewerEnhancement(requestId,'color');
+  }
+ }catch(error){
+  if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(
+   Object.assign(document.createElement('p'),{className:'hint',textContent:error.message||'Cannot open original invoice.'})
+  );
+ }
 }
 $('invoiceViewerClose').onclick=closeInvoiceViewer;
 $('invoiceViewer').addEventListener('click',e=>{if(e.target===$('invoiceViewer'))closeInvoiceViewer()});

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BIG BROTHER Invoice Scanner V2 — Offline Image Test</title>
+<style>body{font:15px/1.5 Arial,sans-serif;max-width:800px;margin:2rem auto;padding:1rem;color:#24476c}li{margin:6px 0}.pass{color:#16733a}.fail{color:#ba3030}</style>
+<script src="../invoice-photo-enhancer-v1.js"></script></head><body>
+<h1>Invoice Scanner V2 — Local Test</h1>
+<p>Uses synthetic graphics only. No uploads, accounts, OCR, AI or external requests.</p>
+<ol id="results"></ol>
+<script>
+(async()=>{
+const el=document.getElementById('results'),api=window.BBInvoiceEnhancerV1;
+function check(label,test){const li=document.createElement('li');try{if(!test())throw Error('Assertion failed');li.className='pass';li.textContent='PASS · '+label;}
+catch(e){li.className='fail';li.textContent='FAIL · '+label+' · '+e.message;document.title='FAILED — '+document.title;}el.append(li);}
+const w=160,h=192,source=new Uint8ClampedArray(w*h*4);
+for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+ const i=(y*w+x)*4,shadow=x<80?31:0;
+ const ink=(x>28&&x<40&&y>24&&y<170);
+ const c=ink?76-shadow/4:205-shadow;
+ source[i]=source[i+1]=source[i+2]=c;source[i+3]=255;
+}
+const before=source.slice(),color=api.enhancePixels(source,w,h,'color'),bw=api.enhancePixels(source,w,h,'bw');
+const val=(a,x,y)=>a[(y*w+x)*4];
+check('Original pixel data remains unmodified',()=>source.every((v,i)=>v===before[i]));
+check('Handwriting/background contrast increases',
+ ()=>val(color,70,20)-val(color,33,100)>val(source,70,20)-val(source,33,100));
+check('A shadowed paper area becomes more even',
+ ()=>Math.abs(val(color,15,20)-val(color,145,20))<=Math.abs(val(source,15,20)-val(source,145,20)));
+check('B&W uses matched channels and retains alpha',
+ ()=>bw.every((v,i)=>i%4===3? v===255 : v===bw[i-i%4]));
+const colors=new Uint8ClampedArray([20,60,180,255,180,30,12,130]);
+const values=api.enhancePixels(colors,2,1,'color');
+check('Blue ink and red stamp hues stay distinguishable',
+ ()=>values[2]>values[0]&&values[4]>values[5]&&values[7]===130);
+check('Unsupported mode is rejected',()=>{
+ try{api.enhancePixels(source,w,h,'invalid')}catch{return true}return false;
+});
+const sample=document.createElement('canvas');sample.width=160;sample.height=220;
+const ctx=sample.getContext('2d');
+ctx.fillStyle='#deddd4';ctx.fillRect(0,0,160,220);
+ctx.fillStyle='#234d9f';ctx.font='bold 20px sans-serif';ctx.fillText('INV-00001',8,38);
+try{
+ const original=await new Promise(r=>sample.toBlob(r,'image/png'));
+ const enhanced=await api.enhance(original,'color');
+ check('Browser Canvas produces an enhanced JPEG preview',
+  ()=>enhanced.blob.type==='image/jpeg'&&enhanced.width===160&&enhanced.height===220);
+ check('Original Blob remains a PNG, never modified',
+  ()=>original.type==='image/png'&&original.size>0);
+}catch(e){check('Browser Canvas enhancement could run',()=>{throw e})}
+})();
+</script></body></html>
