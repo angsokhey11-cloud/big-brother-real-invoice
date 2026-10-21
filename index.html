@@ -149,7 +149,7 @@ function normalizedInvoice(v){
 let photoEnhanceGeneration=0,photoEnhanceMode='color',photoEnhanceVariants=new Map(),photoEnhanceJobs=new Map();
 function clearPhotoEnhancements(){
  photoEnhanceGeneration++;
- for(const item of photoEnhanceVariants.values())URL.revokeObjectURL(item.url);
+ for(const item of photoEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
  photoEnhanceVariants.clear();photoEnhanceJobs.clear();
  $('scanEnhanceStatus').textContent='';
  $('scanEnhanceTools').hidden=true;
@@ -182,7 +182,7 @@ async function preparePhotoEnhancement(file,mode){
   try{
    const result=await window.BBInvoiceEnhancerV1.enhance(file,mode);
    if(generation!==photoEnhanceGeneration||chosen!==file)return;
-   photoEnhanceVariants.set(mode,{url:URL.createObjectURL(result.blob),blob:result.blob});
+   photoEnhanceVariants.set(mode,{url:window.URL.createObjectURL(result.blob),blob:result.blob});
   }catch(error){
    if(generation===photoEnhanceGeneration)
     $('scanEnhanceStatus').textContent='Enhancement unavailable: '+(error?.message||'use original');
@@ -634,7 +634,7 @@ async function upload(){
 let invoiceViewerRequest=0,viewerSignedUrl='',viewerMode='original';
 let viewerEnhanceVariants=new Map(),viewerEnhanceJobs=new Map(),viewerOriginalDownload=null;
 function clearViewerEnhancements(){
- for(const item of viewerEnhanceVariants.values())URL.revokeObjectURL(item.url);
+ for(const item of viewerEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
  viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerOriginalDownload=null;
  viewerSignedUrl='';viewerMode='original';
  $('viewerEnhanceActions').hidden=true;
@@ -684,7 +684,7 @@ async function prepareViewerEnhancement(requestId,mode){
    }
    const enhanced=await window.BBInvoiceEnhancerV1.enhance(original,mode);
    if(requestId!==invoiceViewerRequest)return;
-   viewerEnhanceVariants.set(mode,{url:URL.createObjectURL(enhanced.blob),blob:enhanced.blob});
+   viewerEnhanceVariants.set(mode,{url:window.URL.createObjectURL(enhanced.blob),blob:enhanced.blob});
   }catch(error){
    if(requestId===invoiceViewerRequest){
     viewerOriginalDownload=null;
