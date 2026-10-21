@@ -16,17 +16,17 @@
     natural:Object.freeze({
       color:{contrast:1.14,lift:7,shadow:.32,maxLift:28,sharp:.18,maxSharp:8},
       bw:{contrast:1.31,lift:10,shadow:.32,maxLift:35,sharp:.22,maxSharp:8},
-      scan:{paperTarget:218,paperLift:.70,maxPaperLift:18,inkContrast:1.06,sharp:.11,maxSharp:5}
+      scan:{paperTarget:215,paperLift:.65,maxPaperLift:16,inkContrast:1.06,sharp:.11,maxSharp:5}
     }),
     clear:Object.freeze({
       color:{contrast:1.27,lift:13,shadow:.44,maxLift:38,sharp:.23,maxSharp:10},
       bw:{contrast:1.41,lift:14,shadow:.42,maxLift:44,sharp:.26,maxSharp:10},
-      scan:{paperTarget:228,paperLift:.78,maxPaperLift:28,inkContrast:1.13,sharp:.15,maxSharp:6}
+      scan:{paperTarget:224,paperLift:.72,maxPaperLift:24,inkContrast:1.13,sharp:.15,maxSharp:6}
     }),
     strong:Object.freeze({
       color:{contrast:1.42,lift:18,shadow:.60,maxLift:52,sharp:.32,maxSharp:14},
       bw:{contrast:1.54,lift:20,shadow:.56,maxLift:55,sharp:.34,maxSharp:13},
-      scan:{paperTarget:234,paperLift:.85,maxPaperLift:36,inkContrast:1.20,sharp:.17,maxSharp:7}
+      scan:{paperTarget:230,paperLift:.80,maxPaperLift:30,inkContrast:1.20,sharp:.17,maxSharp:7}
     })
   });
 
