@@ -685,82 +685,94 @@ async function upload(){
   if(/number does not match/i.test(e.message))$('typedInvoice').value='';
  }finally{busy=false;$('confirmSubmit').disabled=false;updateComplete()}
 }
-let invoiceViewerRequest=0,viewerSignedUrl='',viewerMode='original';
-let viewerEnhanceVariants=new Map(),viewerEnhanceJobs=new Map(),viewerOriginalDownload=null;
+let invoiceViewerRequest=0,viewerSignedUrl='',viewerMode='original',viewerEnhanceStrength='clear';
+let viewerEnhanceVariants=new Map(),viewerEnhanceJobs=new Map(),viewerOriginalDownload=null,viewerEnhanceFailed=new Set();
 function clearViewerEnhancements(){
  for(const item of viewerEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
- viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerOriginalDownload=null;
- viewerSignedUrl='';viewerMode='original';
- $('viewerEnhanceActions').hidden=true;
+ viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerEnhanceFailed.clear();
+ viewerOriginalDownload=null;viewerSignedUrl='';viewerMode='original';viewerEnhanceStrength='clear';
+ $('viewerEnhanceStrength').value='1';$('viewerEnhanceStrengthLabel').textContent='Clear';
+ $('viewerEnhanceActions').hidden=true;$('viewerStrengthControl').hidden=true;
  $('viewerEnhanceStatus').hidden=true;$('viewerEnhanceStatus').textContent='';
 }
 function closeInvoiceViewer(){
- invoiceViewerRequest++;
- clearViewerEnhancements();
- $('invoiceViewer').hidden=true;
- $('invoiceViewerBody').replaceChildren();
+ invoiceViewerRequest++;clearViewerEnhancements();
+ $('invoiceViewer').hidden=true;$('invoiceViewerBody').replaceChildren();
 }
 function renderViewerMode(){
  for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW']]){
   $(id).className=viewerMode===mode?'active':'alt';
   $(id).setAttribute('aria-pressed',viewerMode===mode?'true':'false');
  }
- const img=$('invoiceViewerBody').querySelector('img');
- if(!img||!viewerSignedUrl)return;
- img.src=viewerMode==='original'?viewerSignedUrl:
-  (viewerEnhanceVariants.get(viewerMode)?.url||viewerSignedUrl);
- const ready=viewerEnhanceVariants.has(viewerMode);
+ const image=$('invoiceViewerBody').querySelector('img');
+ if(!image||!viewerSignedUrl)return;
+ const key=enhanceKey(viewerMode,viewerEnhanceStrength),ready=viewerEnhanceVariants.has(key);
+ const url=viewerMode==='original'?viewerSignedUrl:
+  (viewerEnhanceVariants.get(key)?.url||viewerSignedUrl);
+ if(image.src!==url)image.src=url;
  $('viewerEnhanceStatus').textContent=viewerMode==='original'
   ?'Viewing private original invoice'
-  :ready?'Enhanced locally for viewing. The private original remains unchanged.'
-  :'Preparing on-device enhancement… original displayed in the meantime.';
+  :ready?enhanceLabel(viewerEnhanceStrength)+' view ready · private original unchanged'
+  :viewerEnhanceFailed.has(key)?'Enhancement unavailable; view Original.'
+  :viewerEnhanceJobs.size>0?'Processing '+enhanceLabel(viewerEnhanceStrength)+' locally…'
+  :'Preparing '+enhanceLabel(viewerEnhanceStrength)+' view…';
 }
-async function prepareViewerEnhancement(requestId,mode){
+async function prepareViewerEnhancement(requestId,mode,strength=viewerEnhanceStrength){
  if(!viewerSignedUrl||!['color','bw'].includes(mode)||requestId!==invoiceViewerRequest)return;
- if(viewerEnhanceVariants.has(mode)||viewerEnhanceJobs.has(mode))return;
+ const key=enhanceKey(mode,strength);
+ if(viewerEnhanceVariants.has(key)||viewerEnhanceJobs.has(key)||viewerEnhanceFailed.has(key))return;
+ // Do not spawn multiple full-resolution processing jobs on low-memory tablets.
+ if(viewerEnhanceJobs.size>0)return;
  if(typeof window.BBInvoiceEnhancerV1?.enhance!=='function'){
-  $('viewerEnhanceStatus').textContent='Enhancer unavailable. Original photo is still available.';return;
+  viewerEnhanceFailed.add(key);renderViewerMode();return;
  }
  const signed=viewerSignedUrl;
  const job=(async()=>{
   try{
-   // The signed URL is for an already-authorized private original.
-   // Fetch once; no second storage object or A/R database record is created.
-   if(!viewerOriginalDownload)viewerOriginalDownload=fetch(signed,{cache:'no-store'})
-     .then(response=>{
-      if(!response.ok)throw Error('Could not load original photo for local enhancement.');
-      return response.blob();
-     });
+   // Reuse the same authorized, signed private image for all preview strengths.
+   if(!viewerOriginalDownload)viewerOriginalDownload=fetch(signed,{cache:'no-store'}).then(response=>{
+    if(!response.ok)throw Error('Could not read private original for local enhancement.');
+    return response.blob();
+   });
    let original=await viewerOriginalDownload;
    if(requestId!==invoiceViewerRequest)return;
-   if(!original.type.startsWith('image/')){
-    original=new Blob([original],{type:'image/jpeg'});
-   }
-   const enhanced=await window.BBInvoiceEnhancerV1.enhance(original,mode);
+   if(!original.type.startsWith('image/'))original=new Blob([original],{type:'image/jpeg'});
+   const result=await window.BBInvoiceEnhancerV1.enhance(original,mode,strength);
    if(requestId!==invoiceViewerRequest)return;
-   viewerEnhanceVariants.set(mode,{url:window.URL.createObjectURL(enhanced.blob),blob:enhanced.blob});
+   viewerEnhanceVariants.set(key,{url:window.URL.createObjectURL(result.blob),blob:result.blob});
   }catch(error){
    if(requestId===invoiceViewerRequest){
-    viewerOriginalDownload=null;
-    $('viewerEnhanceStatus').textContent='Enhanced view unavailable: '+
-      (error?.message||'Use Original.');
+    viewerEnhanceFailed.add(key);viewerOriginalDownload=null;
+    $('viewerEnhanceStatus').textContent='Enhanced view unavailable: '+(error?.message||'use Original');
    }
   }finally{
    if(requestId===invoiceViewerRequest){
-    viewerEnhanceJobs.delete(mode);
-    if(viewerEnhanceVariants.has(mode))renderViewerMode();
+    viewerEnhanceJobs.delete(key);renderViewerMode();
+    const latest=enhanceKey(viewerMode,viewerEnhanceStrength);
+    if(viewerMode!=='original'&&viewerEnhanceJobs.size===0&&
+       !viewerEnhanceVariants.has(latest)&&!viewerEnhanceFailed.has(latest))
+      void prepareViewerEnhancement(requestId,viewerMode,viewerEnhanceStrength);
    }
   }
  })();
- viewerEnhanceJobs.set(mode,job);
- renderViewerMode();
- await job;
+ viewerEnhanceJobs.set(key,job);renderViewerMode();await job;
 }
 function chooseViewerMode(mode){
  if(!['original','color','bw'].includes(mode)||!viewerSignedUrl)return;
  viewerMode=mode;renderViewerMode();
- if(mode!=='original')void prepareViewerEnhancement(invoiceViewerRequest,mode);
+ if(mode!=='original')void prepareViewerEnhancement(invoiceViewerRequest,mode,viewerEnhanceStrength);
 }
+function setViewerEnhanceStrength(value){
+ const index=Math.max(0,Math.min(2,Math.round(Number(value)||0)));
+ const strength=ENHANCE_LEVELS[index];
+ $('viewerEnhanceStrength').value=String(index);
+ $('viewerEnhanceStrengthLabel').textContent=enhanceLabel(strength);
+ if(viewerEnhanceStrength===strength)return;
+ viewerEnhanceStrength=strength;renderViewerMode();
+ if(viewerMode!=='original'&&viewerSignedUrl)
+  void prepareViewerEnhancement(invoiceViewerRequest,viewerMode,strength);
+}
+$('viewerEnhanceStrength').oninput=e=>setViewerEnhanceStrength(e.target.value);
 $('viewerViewOriginal').onclick=()=>chooseViewerMode('original');
 $('viewerViewColor').onclick=()=>chooseViewerMode('color');
 $('viewerViewBW').onclick=()=>chooseViewerMode('bw');
@@ -796,8 +808,9 @@ async function view(r){
    viewerSignedUrl=signed;
    viewerMode='color';
    $('viewerEnhanceActions').hidden=false;
+   $('viewerStrengthControl').hidden=false;
    $('viewerEnhanceStatus').hidden=false;
-   void prepareViewerEnhancement(requestId,'color');
+   void prepareViewerEnhancement(requestId,'color',viewerEnhanceStrength);
   }
  }catch(error){
   if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(
