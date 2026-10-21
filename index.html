@@ -94,6 +94,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div id="confirmEnhanceModes" class="scan-enhance-confirm" hidden>
   <button type="button" class="alt" id="confirmViewOriginal">Original</button>
   <button type="button" class="alt" id="confirmViewColor">Enhanced</button>
+  <button type="button" class="alt" id="confirmViewBW">B&W</button>
 </div>
 <p class="hint">Compare the printed number with the original if handwriting is unclear. Only the unmodified selected photo is archived.</p><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
 <script>
@@ -144,6 +145,82 @@ function normalizedInvoice(v){
  if(!/^[0-9]{1,10}$/.test(text))return null;
  return text.replace(/^0+/,'')||'0';
 }
+// Invoice Scanner V2 — local-only preview. The selected file is always archived unchanged.
+let photoEnhanceGeneration=0,photoEnhanceMode='color',photoEnhanceVariants=new Map(),photoEnhanceJobs=new Map();
+function clearPhotoEnhancements(){
+ photoEnhanceGeneration++;
+ for(const item of photoEnhanceVariants.values())URL.revokeObjectURL(item.url);
+ photoEnhanceVariants.clear();photoEnhanceJobs.clear();
+ $('scanEnhanceStatus').textContent='';
+ $('scanEnhanceTools').hidden=true;
+ $('scanDownloadEnhanced').disabled=true;
+ $('confirmEnhanceModes').hidden=true;
+}
+function photoPreviewUrl(mode){return mode==='original'?previewUrl:(photoEnhanceVariants.get(mode)?.url||previewUrl)}
+function renderPhotoEnhancement(){
+ const image=$('preview').querySelector('img');
+ if(!image||!chosen?.type.startsWith('image/'))return;
+ image.src=photoPreviewUrl(photoEnhanceMode);
+ for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW']]){
+  $(id).className=photoEnhanceMode===mode?'active':'alt';
+  $(id).setAttribute('aria-pressed',photoEnhanceMode===mode?'true':'false');
+ }
+ const ready=photoEnhanceVariants.has(photoEnhanceMode),working=photoEnhanceJobs.has(photoEnhanceMode);
+ $('scanEnhanceStatus').textContent=photoEnhanceMode==='original'?'Original selected photo · audit source':
+  ready?'Enhanced locally · archived original unchanged':
+  working?'Enhancing locally… showing original while processing':'Preparing document view…';
+ $('scanDownloadEnhanced').disabled=!photoEnhanceVariants.has(photoEnhanceMode==='bw'?'bw':'color');
+}
+async function preparePhotoEnhancement(file,mode){
+ if(!file?.type.startsWith('image/')||!['color','bw'].includes(mode))return;
+ if(photoEnhanceVariants.has(mode)||photoEnhanceJobs.has(mode))return;
+ if(typeof window.BBInvoiceEnhancerV1?.enhance!=='function'){
+  $('scanEnhanceStatus').textContent='Enhancer unavailable; original photo remains usable.';return;
+ }
+ const generation=photoEnhanceGeneration;
+ const job=(async()=>{
+  try{
+   const result=await window.BBInvoiceEnhancerV1.enhance(file,mode);
+   if(generation!==photoEnhanceGeneration||chosen!==file)return;
+   photoEnhanceVariants.set(mode,{url:URL.createObjectURL(result.blob),blob:result.blob});
+  }catch(error){
+   if(generation===photoEnhanceGeneration)
+    $('scanEnhanceStatus').textContent='Enhancement unavailable: '+(error?.message||'use original');
+  }finally{
+   if(generation===photoEnhanceGeneration){photoEnhanceJobs.delete(mode);renderPhotoEnhancement()}
+  }
+ })();
+ photoEnhanceJobs.set(mode,job);
+ renderPhotoEnhancement();
+ await job;
+}
+function choosePhotoEnhancement(mode){
+ if(!['original','color','bw'].includes(mode))return;
+ photoEnhanceMode=mode;renderPhotoEnhancement();
+ if(mode!=='original'&&chosen?.type.startsWith('image/'))void preparePhotoEnhancement(chosen,mode);
+}
+function setConfirmPhotoMode(mode){
+ const image=$('confirmPhoto').querySelector('img');if(!image)return;
+ image.src=photoPreviewUrl(mode);
+ for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW']]){
+  $(id).className=mode===key?'active':'alt';
+  $(id).disabled=key!=='original'&&!photoEnhanceVariants.has(key);
+ }
+}
+$('scanViewOriginal').onclick=()=>choosePhotoEnhancement('original');
+$('scanViewColor').onclick=()=>choosePhotoEnhancement('color');
+$('scanViewBW').onclick=()=>choosePhotoEnhancement('bw');
+$('confirmViewOriginal').onclick=()=>setConfirmPhotoMode('original');
+$('confirmViewColor').onclick=()=>setConfirmPhotoMode('color');
+$('confirmViewBW').onclick=()=>setConfirmPhotoMode('bw');
+$('scanDownloadEnhanced').onclick=()=>{
+ const key=photoEnhanceMode==='bw'?'bw':'color',asset=photoEnhanceVariants.get(key);
+ if(!asset||!chosen)return;
+ const link=document.createElement('a');link.href=asset.url;
+ link.download=(clean(selected?.invoiceNo)||'invoice')+(key==='bw'?'-black-white':'-enhanced')+'.jpg';
+ document.body.append(link);link.click();link.remove();
+};
+
 // The preview canvas is only for display. Capture directly from the
 // maximum-resolution live video frame to avoid the old 710x1000 limitation.
 // Browsers cannot promise the phone's native camera-app still-photo quality.
@@ -427,13 +504,19 @@ function showConfirm(){
  $('confirmPhoto').replaceChildren();
  if(chosen.type.startsWith('image/')){
   const img=document.createElement('img');img.alt='Photo to inspect and confirm';
-  img.src=previewUrl;$('confirmPhoto').append(img);
- }else $('confirmPhoto').textContent='Selected PDF: '+chosen.name+' — review your paper invoice before continuing.';
+  img.src=photoPreviewUrl(photoEnhanceMode);$('confirmPhoto').append(img);
+  $('confirmEnhanceModes').hidden=false;
+  setConfirmPhotoMode(photoEnhanceVariants.has(photoEnhanceMode)?photoEnhanceMode:'original');
+ }else{
+  $('confirmEnhanceModes').hidden=true;
+  $('confirmPhoto').textContent='Selected PDF: '+chosen.name+' — review your paper invoice before continuing.';
+ }
  $('modal').hidden=true;$('confirmModal').hidden=false;$('typedInvoice').focus();
 }
 $('confirmBack').onclick=()=>{$('confirmModal').hidden=true;$('modal').hidden=false};
 $('typedInvoice').addEventListener('keydown',e=>{if(e.key==='Enter')$('confirmSubmit').click()});
 function applyChosen(f){
+ clearPhotoEnhancements();
  chosen=f;
  if(previewUrl)window.URL.revokeObjectURL(previewUrl);
  previewUrl=f?window.URL.createObjectURL(f):'';
@@ -441,6 +524,10 @@ function applyChosen(f){
  if(f?.type.startsWith('image/')){
   const img=document.createElement('img');img.src=previewUrl;img.alt='Invoice photo preview';
   $('preview').append(img);
+  $('scanEnhanceTools').hidden=false;
+  photoEnhanceMode='color';
+  renderPhotoEnhancement();
+  void preparePhotoEnhancement(f,'color');
  }else $('preview').textContent=f?'PDF: '+f.name:'No photo selected';
  $('selectedFileName').textContent=f?'Selected: '+f.name:'No photo selected';
  updateComplete();
@@ -500,6 +587,7 @@ function close(){
  if(busy)return;
  stopCamera();$('confirmModal').hidden=true;$('modal').hidden=true;
  selected=null;chosen=null;sourcePhoto=null;
+ clearPhotoEnhancements();
  if(previewUrl){window.URL.revokeObjectURL(previewUrl);previewUrl=''}
  if(editorBitmap){editorBitmap.close();editorBitmap=null}
 }
