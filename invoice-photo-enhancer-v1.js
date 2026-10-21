@@ -13,79 +13,80 @@
   function enhancePixels(data,width,height,mode){
     const bw=mode==='bw';
     if(mode!=='color'&&!bw)throw new Error('Unsupported enhancement mode.');
-    if(!data||data.length!==width*height*4||!width||!height)throw new Error('Invalid image pixels.');
-    const n=data.length;
-    const tile=Math.max(48,Math.min(112,Math.round(Math.max(width,height)/26)));
+    if(!data||data.length!==width*height*4||!width||!height)
+      throw new Error('Invalid image pixels.');
+    const tile=Math.max(64,Math.min(126,Math.round(Math.max(width,height)/26)));
     const cols=Math.ceil(width/tile),rows=Math.ceil(height/tile);
     const averages=new Float32Array(cols*rows);
-    // Sample bright areas more heavily than handwriting so the paper/background
-    // light level is estimated without treating dark text as a shadow.
-    const step=4;
-    for(let gy=0;gy<rows;gy++){
-      for(let gx=0;gx<cols;gx++){
-        let sum=0,weight=0;
-        const yEnd=Math.min(height,(gy+1)*tile);
-        const xEnd=Math.min(width,(gx+1)*tile);
-        for(let y=gy*tile;y<yEnd;y+=step){
-          for(let x=gx*tile;x<xEnd;x+=step){
-            const i=(y*width+x)*4;
-            const l=(77*data[i]+150*data[i+1]+29*data[i+2])/256;
-            const w=l>=135?1:0.22;
-            sum+=l*w;weight+=w;
-          }
-        }
-        averages[gy*cols+gx]=weight?sum/weight:180;
+    // Background/paper brightness estimate (low-resolution grid).
+    for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+      let sum=0,weight=0;
+      const yEnd=Math.min(height,(gy+1)*tile);
+      const xEnd=Math.min(width,(gx+1)*tile);
+      for(let y=gy*tile;y<yEnd;y+=5)for(let x=gx*tile;x<xEnd;x+=5){
+        const i=(y*width+x)*4;
+        const lum=(77*data[i]+150*data[i+1]+29*data[i+2])/256;
+        const w=lum>=135?1:.22;
+        sum+=lum*w;weight+=w;
       }
+      averages[gy*cols+gx]=weight?sum/weight:180;
     }
-    // 70th-percentile local brightness is the document exposure target.
-    // Individual cells may be darker if the receipt is partly in shadow.
     const sorted=Array.from(averages).sort((a,b)=>a-b);
     const reference=clamp(sorted[Math.floor((sorted.length-1)*.7)]||188,142,224);
-    const result=new Uint8ClampedArray(n);
-    const contrast=bw?1.31:1.14;
-    const baseLift=bw?10:7;
+    const xIndex=new Uint16Array(width);
+    const xMix=new Float32Array(width);
+    for(let x=0;x<width;x++){
+      const v=Math.max(0,Math.min(cols-1,x/tile-.5));
+      xIndex[x]=Math.floor(v);xMix[x]=v-xIndex[x];
+    }
+    const result=new Uint8ClampedArray(data.length);
+    const rowBrightness=new Float32Array(cols);
+    const contrast=bw?1.31:1.14,baseLift=bw?10:7,maxLift=bw?35:28;
+    const stride=width*4;
     for(let y=0;y<height;y++){
       const cellY=Math.max(0,Math.min(rows-1,y/tile-.5));
-      const iy=Math.floor(cellY),fy=cellY-iy,iy2=Math.min(rows-1,iy+1);
+      const iy=Math.floor(cellY),fy=cellY-iy;
+      const nextRow=Math.min(rows-1,iy+1);
+      for(let col=0;col<cols;col++){
+        const k=averages[iy*cols+col],j=averages[nextRow*cols+col];
+        rowBrightness[col]=k+(j-k)*fy;
+      }
+      const rowOffset=y*stride;
       for(let x=0;x<width;x++){
-        const cellX=Math.max(0,Math.min(cols-1,x/tile-.5));
-        const ix=Math.floor(cellX),fx=cellX-ix,ix2=Math.min(cols-1,ix+1);
-        const a=averages[iy*cols+ix],b=averages[iy*cols+ix2];
-        const c=averages[iy2*cols+ix],d=averages[iy2*cols+ix2];
-        const local=(a*(1-fx)+b*fx)*(1-fy)+(c*(1-fx)+d*fx)*fy;
-        const i=(y*width+x)*4;
+        const cell=xIndex[x],mix=xMix[x],i=rowOffset+x*4;
+        const adjacent=rowBrightness[Math.min(cols-1,cell+1)];
+        const local=rowBrightness[cell]+(adjacent-rowBrightness[cell])*mix;
         const red=data[i],green=data[i+1],blue=data[i+2];
-        const luminance=(77*red+150*green+29*blue)/256;
-        // Limit exposure lift: don't erase faint pencil, blue ink or red stamps.
-        const shadowLift=clamp((reference-local)*.32,0,bw?35:28);
-        const illumination=shadowLift*(.24+.76*luminance/255);
-        const corrected=clamp((luminance-125)*contrast+125+baseLift+illumination);
+        const lum=(77*red+150*green+29*blue)/256;
+        let shadow=(reference-local)*.32;
+        if(shadow<0)shadow=0;else if(shadow>maxLift)shadow=maxLift;
+        const corrected=(lum-125)*contrast+125+baseLift+
+          shadow*(.24+.76*lum/255);
         if(bw){
           result[i]=result[i+1]=result[i+2]=corrected;
         }else{
-          // Preserve original ink hue; only slightly neutralize color casts.
-          const chroma=.93;
-          result[i]=clamp(corrected+(red-luminance)*chroma);
-          result[i+1]=clamp(corrected+(green-luminance)*chroma);
-          result[i+2]=clamp(corrected+(blue-luminance)*chroma);
+          result[i]=corrected+(red-lum)*.93;
+          result[i+1]=corrected+(green-lum)*.93;
+          result[i+2]=corrected+(blue-lum)*.93;
         }
         result[i+3]=data[i+3];
       }
     }
-    // Very mild, bounded unsharp contrast; no text, numbers or strokes invented.
-    // In-place sharpening is avoided so neighbors always refer to unchanged pixels.
+    // One luminance-edge pass: conservative sharpening without adding
+    // synthetic letters/numbers; cap ringing at eight levels.
     if(width>=3&&height>=3){
       const previous=result.slice();
-      const effect=bw?.22:.18;
       for(let y=1;y<height-1;y++){
+        const row=y*stride;
         for(let x=1;x<width-1;x++){
-          const i=(y*width+x)*4;
-          for(let c=0;c<3;c++){
-            const avg=(previous[i-4+c]+previous[i+4+c]+
-              previous[i-width*4+c]+previous[i+width*4+c])*.25;
-            const delta=clamp((previous[i+c]-avg)*effect,-9,9);
-            result[i+c]=clamp(previous[i+c]+delta);
-          }
+          const i=row+x*4;
+          const avg=(previous[i-3]+previous[i+5]+
+            previous[i-stride+1]+previous[i+stride+1])*.25;
+          let edge=(previous[i+1]-avg)*(bw?.22:.18);
+          if(edge>8)edge=8;else if(edge< -8)edge=-8;
+          result[i]=previous[i]+edge;
+          result[i+1]=previous[i+1]+edge;
+          result[i+2]=previous[i+2]+edge;
         }
       }
     }
