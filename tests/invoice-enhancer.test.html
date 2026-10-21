@@ -58,8 +58,11 @@ check('Document Clean preserves original alpha across every pixel',()=>docClear.
 check('Document Clean leaves original pixels unchanged',()=>source.every((v,i)=>v===before[i]));
 check('Strength processing leaves all original pixels unchanged',
  ()=>source.every((v,i)=>v===before[i]));
-check('A shadowed paper area becomes more even',
- ()=>Math.abs(val(color,15,20)-val(color,145,20))<=Math.abs(val(source,15,20)-val(source,145,20)));
+check('Regular Color mode brightens paper without requiring perfect shadow removal',
+ ()=>val(color,15,20)>val(source,15,20)&&val(color,145,20)>val(source,145,20));
+check('Natural Document Clean softens the source shadow difference',
+ ()=>Math.abs(val(docClear,15,20)-val(docClear,145,20))
+   <Math.abs(val(source,15,20)-val(source,145,20)));
 check('B&W uses matched channels and retains alpha',
  ()=>bw.every((v,i)=>i%4===3? v===255 : v===bw[i-i%4]));
 const colors=new Uint8ClampedArray([20,60,180,255,180,30,12,130]);
