@@ -202,9 +202,10 @@ function clearPhotoEnhancements(){
  photoEnhanceGeneration++;
  for(const item of photoEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
  photoEnhanceVariants.clear();photoEnhanceJobs.clear();photoEnhanceFailed.clear();
- photoEnhanceStrength='clear';$('scanEnhanceStrength').value='1';
+ photoEnhanceMode='original';photoEnhanceStrength='clear';$('scanEnhanceStrength').value='1';
  $('scanEnhanceStrengthLabel').textContent='Clear';$('scanEnhanceStatus').textContent='';
- $('scanEnhanceTools').hidden=true;$('scanDownloadEnhanced').disabled=true;
+ $('scanEnhanceTools').hidden=true;$('scanEnhanceTools').open=false;
+ $('scanDownloadEnhanced').disabled=true;
  $('confirmEnhanceModes').hidden=true;
 }
 function photoPreviewUrl(mode){
@@ -216,7 +217,7 @@ function renderPhotoEnhancement(){
  if(!image||!chosen?.type.startsWith('image/'))return;
  const url=photoPreviewUrl(photoEnhanceMode);
  if(image.src!==url)image.src=url;
- for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW']]){
+ for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW'],['scan','scanViewScan']]){
   $(id).className=photoEnhanceMode===mode?'active':'alt';
   $(id).setAttribute('aria-pressed',photoEnhanceMode===mode?'true':'false');
  }
@@ -230,7 +231,7 @@ function renderPhotoEnhancement(){
  $('scanDownloadEnhanced').disabled=photoEnhanceMode==='original'||!ready;
 }
 async function preparePhotoEnhancement(file,mode,strength=photoEnhanceStrength){
- if(!file?.type.startsWith('image/')||!['color','bw'].includes(mode))return;
+ if(!file?.type.startsWith('image/')||!['color','bw','scan'].includes(mode))return;
  const key=enhanceKey(mode,strength);
  if(photoEnhanceVariants.has(key)||photoEnhanceJobs.has(key)||photoEnhanceFailed.has(key))return;
  // Serialize heavyweight work: only render the last selected slider position.
@@ -263,7 +264,7 @@ async function preparePhotoEnhancement(file,mode,strength=photoEnhanceStrength){
  photoEnhanceJobs.set(key,job);renderPhotoEnhancement();await job;
 }
 function choosePhotoEnhancement(mode){
- if(!['original','color','bw'].includes(mode))return;
+ if(!['original','color','bw','scan'].includes(mode))return;
  photoEnhanceMode=mode;renderPhotoEnhancement();
  if(mode!=='original'&&chosen?.type.startsWith('image/'))
   void preparePhotoEnhancement(chosen,mode,photoEnhanceStrength);
@@ -281,7 +282,7 @@ function setPhotoEnhanceStrength(value){
 function setConfirmPhotoMode(mode){
  const image=$('confirmPhoto').querySelector('img');if(!image)return;
  image.src=photoPreviewUrl(mode);
- for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW']]){
+ for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW'],['scan','confirmViewScan']]){
   $(id).className=mode===key?'active':'alt';
   $(id).disabled=key!=='original'&&!photoEnhanceVariants.has(enhanceKey(key,photoEnhanceStrength));
  }
@@ -290,15 +291,17 @@ $('scanEnhanceStrength').oninput=e=>setPhotoEnhanceStrength(e.target.value);
 $('scanViewOriginal').onclick=()=>choosePhotoEnhancement('original');
 $('scanViewColor').onclick=()=>choosePhotoEnhancement('color');
 $('scanViewBW').onclick=()=>choosePhotoEnhancement('bw');
+$('scanViewScan').onclick=()=>choosePhotoEnhancement('scan');
 $('confirmViewOriginal').onclick=()=>setConfirmPhotoMode('original');
 $('confirmViewColor').onclick=()=>setConfirmPhotoMode('color');
 $('confirmViewBW').onclick=()=>setConfirmPhotoMode('bw');
+$('confirmViewScan').onclick=()=>setConfirmPhotoMode('scan');
 $('scanDownloadEnhanced').onclick=()=>{
  const mode=photoEnhanceMode,asset=photoEnhanceVariants.get(enhanceKey(mode,photoEnhanceStrength));
  if(!asset||!chosen||mode==='original')return;
  const link=document.createElement('a');link.href=asset.url;
  link.download=(clean(selected?.invoiceNo)||'invoice')+
-  (mode==='bw'?'-black-white':'-enhanced')+'-'+photoEnhanceStrength+'.jpg';
+  (mode==='bw'?'-black-white':mode==='scan'?'-document-clean':'-enhanced')+'-'+photoEnhanceStrength+'.jpg';
  document.body.append(link);link.click();link.remove();
 };
 
@@ -607,9 +610,9 @@ function applyChosen(f){
   const img=document.createElement('img');img.src=previewUrl;img.alt='Invoice photo preview';
   $('preview').append(img);
   $('scanEnhanceTools').hidden=false;
-  photoEnhanceMode='color';
-  renderPhotoEnhancement();
-  void preparePhotoEnhancement(f,'color');
+  $('scanEnhanceTools').open=false; // never auto-expand after import or crop
+  photoEnhanceMode='original';
+  renderPhotoEnhancement(); // never auto-process; the user must choose a tool
  }else $('preview').textContent=f?'PDF: '+f.name:'No photo selected';
  $('selectedFileName').textContent=f?'Selected: '+f.name:'No photo selected';
  updateComplete();
@@ -720,6 +723,7 @@ function clearViewerEnhancements(){
  viewerEnhanceVariants.clear();viewerEnhanceJobs.clear();viewerEnhanceFailed.clear();
  viewerOriginalDownload=null;viewerSignedUrl='';viewerMode='original';viewerEnhanceStrength='clear';
  $('viewerEnhanceStrength').value='1';$('viewerEnhanceStrengthLabel').textContent='Clear';
+ $('viewerEnhanceTools').hidden=true;$('viewerEnhanceTools').open=false;
  $('viewerEnhanceActions').hidden=true;$('viewerStrengthControl').hidden=true;
  $('viewerEnhanceStatus').hidden=true;$('viewerEnhanceStatus').textContent='';
 }
@@ -728,7 +732,7 @@ function closeInvoiceViewer(){
  $('invoiceViewer').hidden=true;$('invoiceViewerBody').replaceChildren();
 }
 function renderViewerMode(){
- for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW']]){
+ for(const [mode,id] of [['original','viewerViewOriginal'],['color','viewerViewColor'],['bw','viewerViewBW'],['scan','viewerViewScan']]){
   $(id).className=viewerMode===mode?'active':'alt';
   $(id).setAttribute('aria-pressed',viewerMode===mode?'true':'false');
  }
@@ -746,7 +750,7 @@ function renderViewerMode(){
   :'Preparing '+enhanceLabel(viewerEnhanceStrength)+' view…';
 }
 async function prepareViewerEnhancement(requestId,mode,strength=viewerEnhanceStrength){
- if(!viewerSignedUrl||!['color','bw'].includes(mode)||requestId!==invoiceViewerRequest)return;
+ if(!viewerSignedUrl||!['color','bw','scan'].includes(mode)||requestId!==invoiceViewerRequest)return;
  const key=enhanceKey(mode,strength);
  if(viewerEnhanceVariants.has(key)||viewerEnhanceJobs.has(key)||viewerEnhanceFailed.has(key))return;
  // Do not spawn multiple full-resolution processing jobs on low-memory tablets.
@@ -786,7 +790,7 @@ async function prepareViewerEnhancement(requestId,mode,strength=viewerEnhanceStr
  viewerEnhanceJobs.set(key,job);renderViewerMode();await job;
 }
 function chooseViewerMode(mode){
- if(!['original','color','bw'].includes(mode)||!viewerSignedUrl)return;
+ if(!['original','color','bw','scan'].includes(mode)||!viewerSignedUrl)return;
  viewerMode=mode;renderViewerMode();
  if(mode!=='original')void prepareViewerEnhancement(invoiceViewerRequest,mode,viewerEnhanceStrength);
 }
@@ -804,6 +808,7 @@ $('viewerEnhanceStrength').oninput=e=>setViewerEnhanceStrength(e.target.value);
 $('viewerViewOriginal').onclick=()=>chooseViewerMode('original');
 $('viewerViewColor').onclick=()=>chooseViewerMode('color');
 $('viewerViewBW').onclick=()=>chooseViewerMode('bw');
+$('viewerViewScan').onclick=()=>chooseViewerMode('scan');
 async function view(r){
  const requestId=++invoiceViewerRequest;
  clearViewerEnhancements();
@@ -834,11 +839,13 @@ async function view(r){
   $('invoiceViewerBody').replaceChildren(media);
   if(!isPDF){
    viewerSignedUrl=signed;
-   viewerMode='color';
+   viewerMode='original';
+   $('viewerEnhanceTools').hidden=false;
+   $('viewerEnhanceTools').open=false; // private originals start untouched
    $('viewerEnhanceActions').hidden=false;
    $('viewerStrengthControl').hidden=false;
    $('viewerEnhanceStatus').hidden=false;
-   void prepareViewerEnhancement(requestId,'color',viewerEnhanceStrength);
+   renderViewerMode(); // no photo processing or second private read on opening
   }
  }catch(error){
   if(requestId===invoiceViewerRequest)$('invoiceViewerBody').replaceChildren(
