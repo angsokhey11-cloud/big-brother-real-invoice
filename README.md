@@ -16,6 +16,35 @@ Documents belong in the private Supabase Storage bucket, never in GitHub. Invoic
 - **Failure**: if decoding/enhancement or signed-url reading fails, the original remains available, with a visible error; enhancement never blocks the Complete/Replace operation.
 - **Local Brain**: no SQL migrations or table changes. Sync the Scanner repository code (including the new `invoice-photo-enhancer-v1.js`) using the existing Control Center V3.4 Code Sync. Windows deployment/device testing must be checked by the operator; Cloud-to-Local business data sync is unnecessary.
 
+### Enhancement Strength (Natural / Clear / Strong)
+
+The upload photo preview and authorized Uploaded History viewer now provide a
+three-position **Enhancement Strength** slider:
+
+- **Natural** — gentle V2-style lighting, ink contrast, and bounded sharpening.
+- **Clear (default)** — visibly stronger cleanup of dark pages and handwritten
+  text than V2, while retaining original ink colors.
+- **Strong** — higher contrast, brightness, local shadow correction and still
+  capped sharpening. It can wash out pale pencil and fine marks; compare with
+  **Original** before confirming any invoice number.
+
+Strength changes are preview-only. Results are cached by photo, viewing mode,
+and strength (e.g. `color:strong`). Only one enhancement job runs at a time:
+rapid slider movement processes the latest selected level instead of generating
+all intermediate previews. Cached Blob URLs are revoked when an invoice photo
+changes or its modal closes. Each fresh photo/history viewer starts on **Clear**.
+
+Changing strength never changes `chosen` (the Blob uploaded to Supabase),
+the verified invoice number, the private original record, permissions, paid
+amounts, or OCR. The signed private original is fetched only once for all
+strengths during an Uploaded History viewing session. PDF uploads and previews
+remain outside this enhancement feature.
+
+**Local Brain:** Existing Code Sync of the scanner's updated `index.html`
+and `invoice-photo-enhancer-v1.js` is sufficient. No SQL migration or
+Cloud-to-Local business-data sync is necessary. Device/browser acceptance
+testing is still needed after code deployment.
+
 Repeatable synthetic-only browser tests: [tests/invoice-enhancer.test.html](tests/invoice-enhancer.test.html).
 
 ### Practical acceptance test

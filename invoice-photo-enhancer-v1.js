@@ -8,11 +8,31 @@
   if(global.BBInvoiceEnhancerV1)return;
   const LIMIT=2400;
   const clamp=(v,min=0,max=255)=>Math.max(min,Math.min(max,v));
+  // Natural approximates the previous V2 output; Clear is distinctly
+  // stronger by default. Strong is capped to avoid extreme ink halos.
+  // These are preview-only processing parameters, never document edits.
+  const LEVELS=Object.freeze({
+    natural:Object.freeze({
+      color:{contrast:1.14,lift:7,shadow:.32,maxLift:28,sharp:.18,maxSharp:8},
+      bw:{contrast:1.31,lift:10,shadow:.32,maxLift:35,sharp:.22,maxSharp:8}
+    }),
+    clear:Object.freeze({
+      color:{contrast:1.27,lift:13,shadow:.44,maxLift:38,sharp:.23,maxSharp:10},
+      bw:{contrast:1.41,lift:14,shadow:.42,maxLift:44,sharp:.26,maxSharp:10}
+    }),
+    strong:Object.freeze({
+      color:{contrast:1.42,lift:18,shadow:.60,maxLift:52,sharp:.32,maxSharp:14},
+      bw:{contrast:1.54,lift:20,shadow:.56,maxLift:55,sharp:.34,maxSharp:13}
+    })
+  });
 
   // Kept independent of Canvas so arithmetic can be regression-tested.
-  function enhancePixels(data,width,height,mode){
+  function enhancePixels(data,width,height,mode,strength='clear'){
     const bw=mode==='bw';
     if(mode!=='color'&&!bw)throw new Error('Unsupported enhancement mode.');
+    if(!Object.prototype.hasOwnProperty.call(LEVELS,strength))
+      throw new Error('Unsupported enhancement strength.');
+    const profile=LEVELS[strength][mode];
     if(!data||data.length!==width*height*4||!width||!height)
       throw new Error('Invalid image pixels.');
     const tile=Math.max(64,Math.min(126,Math.round(Math.max(width,height)/26)));
@@ -41,7 +61,7 @@
     }
     const result=new Uint8ClampedArray(data.length);
     const rowBrightness=new Float32Array(cols);
-    const contrast=bw?1.31:1.14,baseLift=bw?10:7,maxLift=bw?35:28;
+    const contrast=profile.contrast,baseLift=profile.lift,maxLift=profile.maxLift;
     const stride=width*4;
     for(let y=0;y<height;y++){
       const cellY=Math.max(0,Math.min(rows-1,y/tile-.5));
@@ -58,7 +78,7 @@
         const local=rowBrightness[cell]+(adjacent-rowBrightness[cell])*mix;
         const red=data[i],green=data[i+1],blue=data[i+2];
         const lum=(77*red+150*green+29*blue)/256;
-        let shadow=(reference-local)*.32;
+        let shadow=(reference-local)*profile.shadow;
         if(shadow<0)shadow=0;else if(shadow>maxLift)shadow=maxLift;
         const corrected=(lum-125)*contrast+125+baseLift+
           shadow*(.24+.76*lum/255);
@@ -82,8 +102,9 @@
           const i=row+x*4;
           const avg=(previous[i-3]+previous[i+5]+
             previous[i-stride+1]+previous[i+stride+1])*.25;
-          let edge=(previous[i+1]-avg)*(bw?.22:.18);
-          if(edge>8)edge=8;else if(edge< -8)edge=-8;
+          let edge=(previous[i+1]-avg)*profile.sharp;
+          if(edge>profile.maxSharp)edge=profile.maxSharp;
+          else if(edge< -profile.maxSharp)edge=-profile.maxSharp;
           result[i]=previous[i]+edge;
           result[i+1]=previous[i+1]+edge;
           result[i+2]=previous[i+2]+edge;
@@ -110,7 +131,10 @@
     }finally{URL.revokeObjectURL(objectUrl)}
   }
 
-  async function enhance(blob,mode='color'){
+  async function enhance(blob,mode='color',strength='clear'){
+    if(!['color','bw'].includes(mode))throw new Error('Unsupported enhancement mode.');
+    if(!Object.prototype.hasOwnProperty.call(LEVELS,strength))
+      throw new Error('Unsupported enhancement strength.');
     if(!blob?.type?.startsWith('image/'))throw new Error('Select a JPG, PNG or WebP invoice photo.');
     const decoded=await decodePhoto(blob);
     try{
@@ -128,15 +152,15 @@
       let pixels=ctx.getImageData(0,0,width,height);
       // Yield to the UI for a loading indicator before pixel processing.
       await new Promise(resolve=>setTimeout(resolve,0));
-      pixels.data.set(enhancePixels(pixels.data,width,height,mode));
+      pixels.data.set(enhancePixels(pixels.data,width,height,mode,strength));
       ctx.putImageData(pixels,0,0);
       const output=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.92));
       if(!output)throw new Error('Unable to generate enhanced preview.');
       canvas.width=canvas.height=0;
       pixels=null;
-      return {blob:output,width,height,mode};
+      return {blob:output,width,height,mode,strength};
     }finally{decoded.dispose()}
   }
 
-  global.BBInvoiceEnhancerV1=Object.freeze({enhance,enhancePixels});
+  global.BBInvoiceEnhancerV1=Object.freeze({enhance,enhancePixels,levels:Object.freeze(['natural','clear','strong'])});
 })(window);

@@ -19,10 +19,29 @@ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
  source[i]=source[i+1]=source[i+2]=c;source[i+3]=255;
 }
 const before=source.slice(),color=api.enhancePixels(source,w,h,'color'),bw=api.enhancePixels(source,w,h,'bw');
+const natural=api.enhancePixels(source,w,h,'color','natural');
+const clear=api.enhancePixels(source,w,h,'color','clear');
+const strong=api.enhancePixels(source,w,h,'color','strong');
+const naturalBw=api.enhancePixels(source,w,h,'bw','natural');
+const strongBw=api.enhancePixels(source,w,h,'bw','strong');
 const val=(a,x,y)=>a[(y*w+x)*4];
 check('Original pixel data remains unmodified',()=>source.every((v,i)=>v===before[i]));
+check('Clear remains the default for backwards-compatible calls',
+ ()=>color.every((v,i)=>v===clear[i]));
+check('Three supported enhancement presets exist in order',
+ ()=>JSON.stringify(api.levels)===JSON.stringify(['natural','clear','strong']));
 check('Handwriting/background contrast increases',
  ()=>val(color,70,20)-val(color,33,100)>val(source,70,20)-val(source,33,100));
+check('Contrast increases Natural < Clear < Strong',()=>{
+ const k=a=>val(a,70,20)-val(a,33,100);
+ return k(natural)<k(clear)&&k(clear)<k(strong);
+});
+check('B&W has separate increasing strength profiles',()=>{
+ const k=a=>val(a,70,20)-val(a,33,100);
+ return k(naturalBw)<k(bw)&&k(bw)<k(strongBw);
+});
+check('Strength processing leaves all original pixels unchanged',
+ ()=>source.every((v,i)=>v===before[i]));
 check('A shadowed paper area becomes more even',
  ()=>Math.abs(val(color,15,20)-val(color,145,20))<=Math.abs(val(source,15,20)-val(source,145,20)));
 check('B&W uses matched channels and retains alpha',
@@ -34,6 +53,10 @@ check('Blue ink and red stamp hues stay distinguishable',
 check('Unsupported mode is rejected',()=>{
  try{api.enhancePixels(source,w,h,'invalid')}catch{return true}return false;
 });
+check('Unknown enhancement preset is rejected',()=>{
+ try{api.enhancePixels(source,w,h,'color','unsupported')}catch{return true}
+ return false;
+});
 const sample=document.createElement('canvas');sample.width=160;sample.height=220;
 const ctx=sample.getContext('2d');
 ctx.fillStyle='#deddd4';ctx.fillRect(0,0,160,220);
@@ -41,8 +64,12 @@ ctx.fillStyle='#234d9f';ctx.font='bold 20px sans-serif';ctx.fillText('INV-00001'
 try{
  const original=await new Promise(r=>sample.toBlob(r,'image/png'));
  const enhanced=await api.enhance(original,'color');
+ const strongPreview=await api.enhance(original,'color','strong');
  check('Browser Canvas produces an enhanced JPEG preview',
   ()=>enhanced.blob.type==='image/jpeg'&&enhanced.width===160&&enhanced.height===220);
+ check('Canvas honors Clear as default and accepts Strong explicitly',
+  ()=>enhanced.strength==='clear'&&strongPreview.strength==='strong'
+     &&strongPreview.blob.size>0);
  check('Original Blob remains a PNG, never modified',
   ()=>original.type==='image/png'&&original.size>0);
 }catch(e){check('Browser Canvas enhancement could run',()=>{throw e})}
