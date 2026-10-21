@@ -8,20 +8,21 @@
   if(global.BBInvoiceEnhancerV1)return;
   const LIMIT=2400;
   const clamp=(v,min=0,max=255)=>Math.max(min,Math.min(max,v));
-  // Deterministic document presets. Clear is compatible with the previous
-  // default; Strong is deliberately bounded to protect faint handwritten ink.
+  // Natural approximates the previous V2 output; Clear is distinctly
+  // stronger by default. Strong is capped to avoid extreme ink halos.
+  // These are preview-only processing parameters, never document edits.
   const LEVELS=Object.freeze({
     natural:Object.freeze({
-      color:{contrast:1.055,lift:3,shadow:.20,maxLift:19,sharp:.11,maxSharp:5},
-      bw:{contrast:1.16,lift:6,shadow:.26,maxLift:24,sharp:.14,maxSharp:6}
-    }),
-    clear:Object.freeze({
       color:{contrast:1.14,lift:7,shadow:.32,maxLift:28,sharp:.18,maxSharp:8},
       bw:{contrast:1.31,lift:10,shadow:.32,maxLift:35,sharp:.22,maxSharp:8}
     }),
+    clear:Object.freeze({
+      color:{contrast:1.27,lift:13,shadow:.44,maxLift:38,sharp:.23,maxSharp:10},
+      bw:{contrast:1.41,lift:14,shadow:.42,maxLift:44,sharp:.26,maxSharp:10}
+    }),
     strong:Object.freeze({
-      color:{contrast:1.28,lift:13,shadow:.48,maxLift:42,sharp:.26,maxSharp:11},
-      bw:{contrast:1.48,lift:15,shadow:.50,maxLift:48,sharp:.32,maxSharp:12}
+      color:{contrast:1.42,lift:18,shadow:.60,maxLift:52,sharp:.32,maxSharp:14},
+      bw:{contrast:1.54,lift:20,shadow:.56,maxLift:55,sharp:.34,maxSharp:13}
     })
   });
 
