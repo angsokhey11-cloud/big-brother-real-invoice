@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BIG BROTHER Invoice Scanner V2 — Offline Image Test</title>
+<title>BIG BROTHER Invoice Scanner V3 — Offline Image Test</title>
 <style>body{font:15px/1.5 Arial,sans-serif;max-width:800px;margin:2rem auto;padding:1rem;color:#24476c}li{margin:6px 0}.pass{color:#16733a}.fail{color:#ba3030}</style>
 <script src="../invoice-photo-enhancer-v1.js"></script></head><body>
-<h1>Invoice Scanner V2 — Local Test</h1>
+<h1>Invoice Scanner V3 — Local Test</h1>
 <p>Uses synthetic graphics only. No uploads, accounts, OCR, AI or external requests.</p>
 <ol id="results"></ol>
 <script>
@@ -24,6 +24,9 @@ const clear=api.enhancePixels(source,w,h,'color','clear');
 const strong=api.enhancePixels(source,w,h,'color','strong');
 const naturalBw=api.enhancePixels(source,w,h,'bw','natural');
 const strongBw=api.enhancePixels(source,w,h,'bw','strong');
+const docNatural=api.enhancePixels(source,w,h,'scan','natural');
+const docClear=api.enhancePixels(source,w,h,'scan','clear');
+const docStrong=api.enhancePixels(source,w,h,'scan','strong');
 const val=(a,x,y)=>a[(y*w+x)*4];
 check('Original pixel data remains unmodified',()=>source.every((v,i)=>v===before[i]));
 check('Clear remains the default for backwards-compatible calls',
@@ -40,6 +43,17 @@ check('B&W has separate increasing strength profiles',()=>{
  const k=a=>val(a,70,20)-val(a,33,100);
  return k(naturalBw)<k(bw)&&k(bw)<k(strongBw);
 });
+check('Document Clean renders uneven paper as white without replacing source',()=>{
+ const paper=x=>val(docClear,x,20);
+ return paper(20)>245&&paper(145)>245&&Math.abs(paper(20)-paper(145))<6;
+});
+check('Document Clean increases photographed-ink contrast with strength',()=>{
+ const k=a=>val(a,145,20)-val(a,33,100);
+ return k(docNatural)<k(docClear)&&k(docClear)<k(docStrong);
+});
+check('Document Clean preserves grayscale and original alpha',()=>docClear.every((v,i)=>
+ i%4===3? v===255 : v===docClear[i-i%4]));
+check('Document Clean leaves original pixels unchanged',()=>source.every((v,i)=>v===before[i]));
 check('Strength processing leaves all original pixels unchanged',
  ()=>source.every((v,i)=>v===before[i]));
 check('A shadowed paper area becomes more even',
@@ -65,11 +79,14 @@ try{
  const original=await new Promise(r=>sample.toBlob(r,'image/png'));
  const enhanced=await api.enhance(original,'color');
  const strongPreview=await api.enhance(original,'color','strong');
+ const cleanPreview=await api.enhance(original,'scan','clear');
  check('Browser Canvas produces an enhanced JPEG preview',
   ()=>enhanced.blob.type==='image/jpeg'&&enhanced.width===160&&enhanced.height===220);
  check('Canvas honors Clear as default and accepts Strong explicitly',
   ()=>enhanced.strength==='clear'&&strongPreview.strength==='strong'
      &&strongPreview.blob.size>0);
+ check('Browser Canvas supports the optional Document Clean mode',
+  ()=>cleanPreview.blob.type==='image/jpeg'&&cleanPreview.mode==='scan'&&cleanPreview.strength==='clear');
  check('Original Blob remains a PNG, never modified',
   ()=>original.type==='image/png'&&original.size>0);
 }catch(e){check('Browser Canvas enhancement could run',()=>{throw e})}
