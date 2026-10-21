@@ -26,6 +26,15 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .scan-enhance-actions button.active{background:#1769af;color:#fff}
 .scan-enhance-actions button.alt{background:#e2eff9;color:#184b74}
 .scan-enhance-tools p{margin:6px 0 0;color:#607c98;font-size:11px;line-height:1.5}
+.scan-strength-control{margin:9px 0 11px;padding:9px 11px;border:1px solid #d1e2f2;border-radius:9px;background:#fff}
+.scan-strength-control[hidden]{display:none!important}
+.scan-strength-control label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 6px;font-size:12px;font-weight:700;color:#274b6d}
+.scan-strength-control label strong{color:#1258a1;font-size:13px}
+.scan-strength-control input[type=range]{display:block;width:100%;margin:6px 0;accent-color:#1769af;min-height:27px;cursor:pointer}
+.scan-strength-marks{display:flex;justify-content:space-between;color:#657c96;font-size:11px;font-weight:600}
+.scan-strength-hint{font-size:11px;color:#916231;line-height:1.45}
+.viewer-strength-control{width:min(420px,100%);margin:7px auto;padding:8px 12px}
+
 #preview img{display:block;max-width:100%;max-height:39dvh;object-fit:contain;border-radius:8px;margin:6px auto}
 .scan-enhance-confirm{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;margin:7px 0}
 .scan-enhance-confirm button{padding:7px 10px;font-size:12px}
@@ -35,7 +44,7 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-head .viewer-enhance-actions .active{background:#1769af;color:#fff}
 .viewer-enhance-status{font-size:11px;color:#516b88;padding:2px 12px;text-align:center}
 @media(max-width:560px){.invoice-viewer-head{flex-wrap:wrap}.invoice-viewer-head .viewer-enhance-actions{order:3;width:100%;justify-content:center}}
-</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script><script src="invoice-photo-enhancer-v1.js?v=20261021-scanner-v2-photo1"></script></head><body><div class="app">
+</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script><script src="invoice-photo-enhancer-v1.js?v=20261021-scanner-v2-strength1"></script></head><body><div class="app">
 <header class="top"><div><h1>📷 Real Invoice Scanner V2</h1><small>BIG BROTHER · On-device Auto Enhance · Original paper archived</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
 <div class="filterbar">
@@ -66,6 +75,12 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
     <button type="button" id="scanViewBW" class="alt">◐ Black & White</button>
     <button type="button" id="scanDownloadEnhanced" class="alt" disabled>↓ Save Enhanced Copy</button>
   </div>
+  <div id="scanEnhanceStrengthControl" class="scan-strength-control">
+    <label for="scanEnhanceStrength">Enhancement Strength <strong id="scanEnhanceStrengthLabel">Clear</strong></label>
+    <input id="scanEnhanceStrength" type="range" min="0" max="2" step="1" value="1" aria-label="Invoice enhancement strength, Natural, Clear or Strong">
+    <div class="scan-strength-marks"><span>Natural</span><span>Clear</span><span>Strong</span></div>
+    <div class="scan-strength-hint">Strong may hide faint handwriting. Compare with Original before confirming.</div>
+  </div>
   <p>Enhanced photos are temporary viewing copies made on this device. The original selected photo is saved unchanged for audit evidence. No AI API, extra upload, or additional Supabase storage.</p>
 </div>
 <div id="preview" class="hint">No photo selected</div>
@@ -87,6 +102,10 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
     <button type="button" id="viewerViewBW" class="alt">◐ B&W</button>
   </div>
   <button type="button" class="alt" id="invoiceViewerClose">✕ Close</button>
+</div><div id="viewerStrengthControl" class="scan-strength-control viewer-strength-control" hidden>
+  <label for="viewerEnhanceStrength">Enhancement Strength <strong id="viewerEnhanceStrengthLabel">Clear</strong></label>
+  <input id="viewerEnhanceStrength" type="range" min="0" max="2" step="1" value="1" aria-label="Archived invoice viewing strength, Natural, Clear or Strong">
+  <div class="scan-strength-marks"><span>Natural</span><span>Clear</span><span>Strong</span></div>
 </div><div id="viewerEnhanceStatus" class="viewer-enhance-status" role="status" aria-live="polite" hidden></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
 <div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay playsinline muted aria-hidden="true"></video><canvas id="cameraCanvas" width="710" height="1000" aria-label="Portrait live camera preview; tap the invoice number to focus"></canvas><div class="camera-guide"></div><div id="focusRing" class="focus-ring" hidden></div></div><p id="cameraStatus" aria-live="polite">Tap the invoice number to focus where supported.</p><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button class="alt" type="button" id="cameraFocus">◎ Refocus</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
