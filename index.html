@@ -164,68 +164,101 @@ function normalizedInvoice(v){
  if(!/^[0-9]{1,10}$/.test(text))return null;
  return text.replace(/^0+/,'')||'0';
 }
-// Invoice Scanner V2 — local-only preview. The selected file is always archived unchanged.
-let photoEnhanceGeneration=0,photoEnhanceMode='color',photoEnhanceVariants=new Map(),photoEnhanceJobs=new Map();
+// Invoice Scanner V2 — offline preview strength. Only the selected original is archived.
+const ENHANCE_LEVELS=Object.freeze(['natural','clear','strong']);
+const enhanceKey=(mode,strength)=>mode+':'+strength;
+const enhanceLabel=v=>v.charAt(0).toUpperCase()+v.slice(1);
+let photoEnhanceGeneration=0,photoEnhanceMode='color',photoEnhanceStrength='clear';
+let photoEnhanceVariants=new Map(),photoEnhanceJobs=new Map(),photoEnhanceFailed=new Set();
 function clearPhotoEnhancements(){
  photoEnhanceGeneration++;
  for(const item of photoEnhanceVariants.values())window.URL.revokeObjectURL(item.url);
- photoEnhanceVariants.clear();photoEnhanceJobs.clear();
- $('scanEnhanceStatus').textContent='';
- $('scanEnhanceTools').hidden=true;
- $('scanDownloadEnhanced').disabled=true;
+ photoEnhanceVariants.clear();photoEnhanceJobs.clear();photoEnhanceFailed.clear();
+ photoEnhanceStrength='clear';$('scanEnhanceStrength').value='1';
+ $('scanEnhanceStrengthLabel').textContent='Clear';$('scanEnhanceStatus').textContent='';
+ $('scanEnhanceTools').hidden=true;$('scanDownloadEnhanced').disabled=true;
  $('confirmEnhanceModes').hidden=true;
 }
-function photoPreviewUrl(mode){return mode==='original'?previewUrl:(photoEnhanceVariants.get(mode)?.url||previewUrl)}
+function photoPreviewUrl(mode){
+ return mode==='original'?previewUrl:
+  (photoEnhanceVariants.get(enhanceKey(mode,photoEnhanceStrength))?.url||previewUrl);
+}
 function renderPhotoEnhancement(){
  const image=$('preview').querySelector('img');
  if(!image||!chosen?.type.startsWith('image/'))return;
- image.src=photoPreviewUrl(photoEnhanceMode);
+ const url=photoPreviewUrl(photoEnhanceMode);
+ if(image.src!==url)image.src=url;
  for(const [mode,id] of [['original','scanViewOriginal'],['color','scanViewColor'],['bw','scanViewBW']]){
   $(id).className=photoEnhanceMode===mode?'active':'alt';
   $(id).setAttribute('aria-pressed',photoEnhanceMode===mode?'true':'false');
  }
- const ready=photoEnhanceVariants.has(photoEnhanceMode),working=photoEnhanceJobs.has(photoEnhanceMode);
- $('scanEnhanceStatus').textContent=photoEnhanceMode==='original'?'Original selected photo · audit source':
-  ready?'Enhanced locally · archived original unchanged':
-  working?'Enhancing locally… showing original while processing':'Preparing document view…';
- $('scanDownloadEnhanced').disabled=!photoEnhanceVariants.has(photoEnhanceMode==='bw'?'bw':'color');
+ const key=enhanceKey(photoEnhanceMode,photoEnhanceStrength),ready=photoEnhanceVariants.has(key);
+ $('scanEnhanceStatus').textContent=photoEnhanceMode==='original'
+  ?'Original photo · audit source':
+  ready?enhanceLabel(photoEnhanceStrength)+' enhancement ready · original unchanged':
+  photoEnhanceFailed.has(key)?'Enhancement unavailable; original remains usable.':
+  photoEnhanceJobs.size>0?'Processing '+enhanceLabel(photoEnhanceStrength)+' preview locally…':
+  'Preparing '+enhanceLabel(photoEnhanceStrength)+' preview…';
+ $('scanDownloadEnhanced').disabled=photoEnhanceMode==='original'||!ready;
 }
-async function preparePhotoEnhancement(file,mode){
+async function preparePhotoEnhancement(file,mode,strength=photoEnhanceStrength){
  if(!file?.type.startsWith('image/')||!['color','bw'].includes(mode))return;
- if(photoEnhanceVariants.has(mode)||photoEnhanceJobs.has(mode))return;
+ const key=enhanceKey(mode,strength);
+ if(photoEnhanceVariants.has(key)||photoEnhanceJobs.has(key)||photoEnhanceFailed.has(key))return;
+ // Serialize heavyweight work: only render the last selected slider position.
+ if(photoEnhanceJobs.size>0)return;
  if(typeof window.BBInvoiceEnhancerV1?.enhance!=='function'){
-  $('scanEnhanceStatus').textContent='Enhancer unavailable; original photo remains usable.';return;
+  photoEnhanceFailed.add(key);renderPhotoEnhancement();return;
  }
  const generation=photoEnhanceGeneration;
  const job=(async()=>{
   try{
-   const result=await window.BBInvoiceEnhancerV1.enhance(file,mode);
+   const result=await window.BBInvoiceEnhancerV1.enhance(file,mode,strength);
    if(generation!==photoEnhanceGeneration||chosen!==file)return;
-   photoEnhanceVariants.set(mode,{url:window.URL.createObjectURL(result.blob),blob:result.blob});
+   photoEnhanceVariants.set(key,{url:window.URL.createObjectURL(result.blob),blob:result.blob});
   }catch(error){
-   if(generation===photoEnhanceGeneration)
+   if(generation===photoEnhanceGeneration){
+    photoEnhanceFailed.add(key);
     $('scanEnhanceStatus').textContent='Enhancement unavailable: '+(error?.message||'use original');
+   }
   }finally{
-   if(generation===photoEnhanceGeneration){photoEnhanceJobs.delete(mode);renderPhotoEnhancement()}
+   if(generation===photoEnhanceGeneration){
+    photoEnhanceJobs.delete(key);renderPhotoEnhancement();
+    const latest=enhanceKey(photoEnhanceMode,photoEnhanceStrength);
+    if(photoEnhanceMode!=='original'&&chosen===file&&photoEnhanceJobs.size===0
+       &&!photoEnhanceVariants.has(latest)&&!photoEnhanceFailed.has(latest)){
+      void preparePhotoEnhancement(file,photoEnhanceMode,photoEnhanceStrength);
+    }
+   }
   }
  })();
- photoEnhanceJobs.set(mode,job);
- renderPhotoEnhancement();
- await job;
+ photoEnhanceJobs.set(key,job);renderPhotoEnhancement();await job;
 }
 function choosePhotoEnhancement(mode){
  if(!['original','color','bw'].includes(mode))return;
  photoEnhanceMode=mode;renderPhotoEnhancement();
- if(mode!=='original'&&chosen?.type.startsWith('image/'))void preparePhotoEnhancement(chosen,mode);
+ if(mode!=='original'&&chosen?.type.startsWith('image/'))
+  void preparePhotoEnhancement(chosen,mode,photoEnhanceStrength);
+}
+function setPhotoEnhanceStrength(value){
+ const index=Math.max(0,Math.min(2,Math.round(Number(value)||0)));
+ const strength=ENHANCE_LEVELS[index];
+ $('scanEnhanceStrength').value=String(index);
+ $('scanEnhanceStrengthLabel').textContent=enhanceLabel(strength);
+ if(photoEnhanceStrength===strength)return;
+ photoEnhanceStrength=strength;renderPhotoEnhancement();
+ if(photoEnhanceMode!=='original'&&chosen?.type.startsWith('image/'))
+  void preparePhotoEnhancement(chosen,photoEnhanceMode,strength);
 }
 function setConfirmPhotoMode(mode){
  const image=$('confirmPhoto').querySelector('img');if(!image)return;
  image.src=photoPreviewUrl(mode);
  for(const [key,id] of [['original','confirmViewOriginal'],['color','confirmViewColor'],['bw','confirmViewBW']]){
   $(id).className=mode===key?'active':'alt';
-  $(id).disabled=key!=='original'&&!photoEnhanceVariants.has(key);
+  $(id).disabled=key!=='original'&&!photoEnhanceVariants.has(enhanceKey(key,photoEnhanceStrength));
  }
 }
+$('scanEnhanceStrength').oninput=e=>setPhotoEnhanceStrength(e.target.value);
 $('scanViewOriginal').onclick=()=>choosePhotoEnhancement('original');
 $('scanViewColor').onclick=()=>choosePhotoEnhancement('color');
 $('scanViewBW').onclick=()=>choosePhotoEnhancement('bw');
@@ -233,10 +266,11 @@ $('confirmViewOriginal').onclick=()=>setConfirmPhotoMode('original');
 $('confirmViewColor').onclick=()=>setConfirmPhotoMode('color');
 $('confirmViewBW').onclick=()=>setConfirmPhotoMode('bw');
 $('scanDownloadEnhanced').onclick=()=>{
- const key=photoEnhanceMode==='bw'?'bw':'color',asset=photoEnhanceVariants.get(key);
- if(!asset||!chosen)return;
+ const mode=photoEnhanceMode,asset=photoEnhanceVariants.get(enhanceKey(mode,photoEnhanceStrength));
+ if(!asset||!chosen||mode==='original')return;
  const link=document.createElement('a');link.href=asset.url;
- link.download=(clean(selected?.invoiceNo)||'invoice')+(key==='bw'?'-black-white':'-enhanced')+'.jpg';
+ link.download=(clean(selected?.invoiceNo)||'invoice')+
+  (mode==='bw'?'-black-white':'-enhanced')+'-'+photoEnhanceStrength+'.jpg';
  document.body.append(link);link.click();link.remove();
 };
 
@@ -525,7 +559,8 @@ function showConfirm(){
   const img=document.createElement('img');img.alt='Photo to inspect and confirm';
   img.src=photoPreviewUrl(photoEnhanceMode);$('confirmPhoto').append(img);
   $('confirmEnhanceModes').hidden=false;
-  setConfirmPhotoMode(photoEnhanceVariants.has(photoEnhanceMode)?photoEnhanceMode:'original');
+  setConfirmPhotoMode(photoEnhanceVariants.has(enhanceKey(photoEnhanceMode,photoEnhanceStrength))
+   ?photoEnhanceMode:'original');
  }else{
   $('confirmEnhanceModes').hidden=true;
   $('confirmPhoto').textContent='Selected PDF: '+chosen.name+' — review your paper invoice before continuing.';
