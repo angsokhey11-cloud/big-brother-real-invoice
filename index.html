@@ -14,8 +14,29 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 .invoice-viewer-body img{max-width:100%;max-height:100%;object-fit:contain}.invoice-viewer-body iframe{display:block;width:100%;height:100%;border:0;background:white}.invoice-viewer-body .hint{padding:15px}
 @media(max-width:560px){.filterbar{grid-template-columns:minmax(0,1fr);gap:8px}.app{padding:10px}h1{font-size:19px}.row{align-items:flex-start}.row button{width:100%}.tabs button{flex:1} .sheet{padding:14px}}
 .photo-editor{margin:10px 0;padding:10px;border:1px solid #bfd4e9;border-radius:12px;background:#f4f8ff}.photo-editor[hidden],.camera-panel[hidden]{display:none}.photo-editor canvas{display:block;width:min(100%,calc(55dvh * 0.71));height:auto;aspect-ratio:426 / 600;touch-action:none;background:#eaf0f6;cursor:grab}.photo-editor canvas:active{cursor:grabbing}.photo-editor p{font-size:12px;color:#5e7690}.photo-editor canvas{max-width:430px;margin:auto;border:0}.photo-editor label{display:flex;justify-content:space-between;font-weight:700;margin:10px 0 3px}.photo-editor input[type=range]{width:100%;accent-color:#1769af}.photo-editor .buttons{justify-content:center;gap:6px}.photo-editor .buttons button{flex:1}.camera-panel{position:fixed;inset:0;background:#0b192b;z-index:21;display:flex;align-items:center;flex-direction:column;padding:12px;gap:10px}.camera-panel{justify-content:center;padding:10px;gap:8px}.camera-panel video{display:block;width:100%;height:100%;object-fit:cover}.camera-stage{position:relative;flex:none;width:min(100%,calc((100dvh - 165px)* .71),510px);max-height:calc(100dvh - 165px);aspect-ratio:.71;min-height:0;overflow:hidden;border-radius:12px;background:#101b24}.camera-stage video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.camera-stage #cameraCanvas{display:block;width:100%;height:100%;object-fit:fill}.camera-guide{position:absolute;inset:4%;border:3px solid #ffbb42;border-radius:8px;box-shadow:0 0 0 200vmax #07111a65;pointer-events:none}.camera-panel .buttons{flex-shrink:0;display:flex;justify-content:center}.camera-panel .buttons button{min-height:46px}.camera-panel #cameraStatus{font-size:12px;text-align:center;max-width:94%;margin:0}.camera-panel .focus-ring{position:absolute;width:65px;height:65px;border:2px solid #ffdb62;border-radius:10px;box-shadow:0 0 8px #0b192b;transform:translate(-50%,-50%);pointer-events:none}.camera-panel .focus-ring[hidden]{display:none}.camera-panel p{color:#fff;margin:4px}.confirm-sheet{max-width:440px}.confirm-sheet img{max-width:100%;max-height:47dvh;object-fit:contain}.confirm-sheet input{width:100%;padding:13px;font-size:23px;letter-spacing:2px;border:1px solid #9ab8d7;border-radius:10px}.confirm-photo{min-height:85px;text-align:center}
-</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script></head><body><div class="app">
-<header class="top"><div><h1>📷 Real Invoice Scanner</h1><small>BIG BROTHER · Original paper invoices</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
+
+/* Invoice Scanner V2: temporary on-device preview, never overwrites archive. */
+.scan-enhance-tools{margin:10px 0 12px;padding:11px;border:1px solid #bdd7ed;border-radius:11px;background:#f3f9ff}
+.scan-enhance-tools[hidden],.scan-enhance-confirm[hidden]{display:none!important}
+.scan-enhance-header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.scan-enhance-header strong{font-size:13px;color:#185b86}
+.scan-enhance-status{font-size:12px;color:#42688a;min-height:18px}
+.scan-enhance-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:9px 0}
+.scan-enhance-actions button{padding:9px 11px;font-size:12px}
+.scan-enhance-actions button.active{background:#1769af;color:#fff}
+.scan-enhance-actions button.alt{background:#e2eff9;color:#184b74}
+.scan-enhance-tools p{margin:6px 0 0;color:#607c98;font-size:11px;line-height:1.5}
+#preview img{display:block;max-width:100%;max-height:39dvh;object-fit:contain;border-radius:8px;margin:6px auto}
+.scan-enhance-confirm{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;margin:7px 0}
+.scan-enhance-confirm button{padding:7px 10px;font-size:12px}
+.invoice-viewer-head .viewer-enhance-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.invoice-viewer-head .viewer-enhance-actions[hidden]{display:none}
+.invoice-viewer-head .viewer-enhance-actions button{padding:7px 9px;font-size:12px}
+.invoice-viewer-head .viewer-enhance-actions .active{background:#1769af;color:#fff}
+.viewer-enhance-status{font-size:11px;color:#516b88;padding:2px 12px;text-align:center}
+@media(max-width:560px){.invoice-viewer-head{flex-wrap:wrap}.invoice-viewer-head .viewer-enhance-actions{order:3;width:100%;justify-content:center}}
+</style><script src="https://angsokhey11-cloud.github.io/big-brother-dashboard/bb-system-dialog-v1.js?v=20261005-dialog1"></script><script src="invoice-photo-enhancer-v1.js?v=20261021-scanner-v2-photo1"></script></head><body><div class="app">
+<header class="top"><div><h1>📷 Real Invoice Scanner V2</h1><small>BIG BROTHER · On-device Auto Enhance · Original paper archived</small></div><button id="refresh" class="alt">↻ Refresh</button></header>
 <div class="tabs"><button id="pendingTab" class="active">Pending Scan</button><button id="uploadedTab" class="alt">Uploaded History</button></div>
 <div class="filterbar">
  <div><label for="locationFilter">Location</label><select id="locationFilter"><option value="">All permitted locations</option></select></div>
@@ -35,7 +56,18 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div id="pasteTarget" contenteditable="true" tabindex="0" role="textbox" aria-label="Paste clipboard invoice image here" class="paste-target">Tap here, then paste your invoice image</div>
 </div>
 </div>
-<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Up to 12 MB. PDF files remain available without photo cropping.</p>
+<p class="hint">Take a framed camera photo, paste from clipboard or select an existing image. Crop unwanted background before confirming. Photos are enhanced for viewing, while the original file is archived. Up to 12 MB. PDF files are unchanged.</p>
+<div id="scanEnhanceTools" class="scan-enhance-tools" hidden>
+  <div class="scan-enhance-header"><strong>✨ Invoice Scanner V2 · Auto Enhance</strong>
+    <span id="scanEnhanceStatus" class="scan-enhance-status" role="status" aria-live="polite"></span></div>
+  <div class="scan-enhance-actions" role="group" aria-label="Invoice photo preview mode">
+    <button type="button" id="scanViewOriginal" class="alt">Original</button>
+    <button type="button" id="scanViewColor" class="active">✨ Enhanced</button>
+    <button type="button" id="scanViewBW" class="alt">◐ Black & White</button>
+    <button type="button" id="scanDownloadEnhanced" class="alt" disabled>↓ Save Enhanced Copy</button>
+  </div>
+  <p>Enhanced photos are temporary viewing copies made on this device. The original selected photo is saved unchanged for audit evidence. No AI API, extra upload, or additional Supabase storage.</p>
+</div>
 <div id="preview" class="hint">No photo selected</div>
 <div class="crop-tools"><button type="button" id="editPhoto" class="alt" hidden>✂ Edit / Crop Picture</button><button type="button" id="restorePhoto" class="alt" hidden>Restore selected photo</button></div>
 <div id="photoEditor" class="photo-editor" hidden><p>Rotate or move the photo, then select the crop area. The selected box stays visible until you apply the crop or cancel.</p>
@@ -48,10 +80,22 @@ button,input{font:inherit}button{background:#1769af;color:white;border:0;padding
 <div class="replace-fields" id="replaceFields" hidden><label for="replaceReason">Reason for replacing the existing picture</label><textarea id="replaceReason" placeholder="Explain why the original invoice picture must be corrected"></textarea></div><div class="buttons"><button id="cancel" class="alt">Cancel</button><button id="save" disabled>Complete</button></div>
 <p class="message" id="uploadMessage"></p></section></div>
 <div class="invoice-viewer" id="invoiceViewer" hidden role="dialog" aria-modal="true" aria-label="Original invoice viewer">
- <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong><button type="button" class="alt" id="invoiceViewerClose">✕ Close</button></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
+ <section class="invoice-viewer-sheet"><div class="invoice-viewer-head"><strong id="invoiceViewerTitle">Original Invoice</strong>
+  <div id="viewerEnhanceActions" class="viewer-enhance-actions" hidden>
+    <button type="button" id="viewerViewOriginal" class="active">Original</button>
+    <button type="button" id="viewerViewColor" class="alt">✨ Enhanced</button>
+    <button type="button" id="viewerViewBW" class="alt">◐ B&W</button>
+  </div>
+  <button type="button" class="alt" id="invoiceViewerClose">✕ Close</button>
+</div><div id="viewerEnhanceStatus" class="viewer-enhance-status" role="status" aria-live="polite" hidden></div><div id="invoiceViewerBody" class="invoice-viewer-body"></div></section>
 </div>
 <div class="camera-panel" id="cameraPanel" hidden><p>Position the full invoice paper inside the gold frame</p><div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay playsinline muted aria-hidden="true"></video><canvas id="cameraCanvas" width="710" height="1000" aria-label="Portrait live camera preview; tap the invoice number to focus"></canvas><div class="camera-guide"></div><div id="focusRing" class="focus-ring" hidden></div></div><p id="cameraStatus" aria-live="polite">Tap the invoice number to focus where supported.</p><div class="buttons"><button class="alt" type="button" id="cameraClose">Cancel</button><button class="alt" type="button" id="cameraFocus">◎ Refocus</button><button type="button" id="cameraCapture">📸 Capture Photo</button></div></div>
-<div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
+<div class="modal" id="confirmModal" hidden style="z-index:12"><section class="sheet confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">What is the invoice number you just scanned?</h2><p class="hint">Read the number from the photograph. Leading zeros are optional. The answer is checked securely.</p><div id="confirmPhoto" class="confirm-photo"></div>
+<div id="confirmEnhanceModes" class="scan-enhance-confirm" hidden>
+  <button type="button" class="alt" id="confirmViewOriginal">Original</button>
+  <button type="button" class="alt" id="confirmViewColor">Enhanced</button>
+</div>
+<p class="hint">Compare the printed number with the original if handwriting is unclear. Only the unmodified selected photo is archived.</p><label for="typedInvoice">Printed invoice number</label><input id="typedInvoice" inputmode="numeric" autocomplete="off" pattern="[0-9]*" placeholder="Enter number"><p id="confirmError" class="message" role="status"></p><div class="buttons"><button class="alt" id="confirmBack" type="button">Back to picture</button><button id="confirmSubmit" type="button">Confirm & Upload</button></div></section></div>
 <script>
 (()=>{
 'use strict';
