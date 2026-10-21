@@ -8,24 +8,25 @@
   if(global.BBInvoiceEnhancerV1)return;
   const LIMIT=2400;
   const clamp=(v,min=0,max=255)=>Math.max(min,Math.min(max,v));
-  // Natural approximates the previous V2 output; Clear is distinctly
-  // stronger by default. Strong is capped to avoid extreme ink halos.
-  // These are preview-only processing parameters, never document edits.
+  // Photo color/B&W presets retain the prior V3 behavior. Document Clean
+  // uses separate soft paper-tone correction at all strengths to avoid
+  // artificial white backgrounds and disappearing colored handwriting.
+  // All processing is temporary and never changes original audit evidence.
   const LEVELS=Object.freeze({
     natural:Object.freeze({
       color:{contrast:1.14,lift:7,shadow:.32,maxLift:28,sharp:.18,maxSharp:8},
       bw:{contrast:1.31,lift:10,shadow:.32,maxLift:35,sharp:.22,maxSharp:8},
-      scan:{inkGain:1.48,inkThreshold:3.5,sharp:.13,maxSharp:5}
+      scan:{paperTarget:215,paperLift:.65,maxPaperLift:16,inkContrast:1.06,sharp:.11,maxSharp:5}
     }),
     clear:Object.freeze({
       color:{contrast:1.27,lift:13,shadow:.44,maxLift:38,sharp:.23,maxSharp:10},
       bw:{contrast:1.41,lift:14,shadow:.42,maxLift:44,sharp:.26,maxSharp:10},
-      scan:{inkGain:1.88,inkThreshold:3,sharp:.15,maxSharp:6}
+      scan:{paperTarget:224,paperLift:.72,maxPaperLift:24,inkContrast:1.13,sharp:.15,maxSharp:6}
     }),
     strong:Object.freeze({
       color:{contrast:1.42,lift:18,shadow:.60,maxLift:52,sharp:.32,maxSharp:14},
       bw:{contrast:1.54,lift:20,shadow:.56,maxLift:55,sharp:.34,maxSharp:13},
-      scan:{inkGain:2.3,inkThreshold:2,sharp:.18,maxSharp:7}
+      scan:{paperTarget:230,paperLift:.80,maxPaperLift:30,inkContrast:1.20,sharp:.17,maxSharp:7}
     })
   });
 
@@ -82,14 +83,23 @@
         const red=data[i],green=data[i+1],blue=data[i+2];
         const lum=(77*red+150*green+29*blue)/256;
         if(scan){
-          // Optional high-contrast paper-normalization: estimate local white
-          // level, then measure real captured ink against it. This only maps
-          // existing pixels, never interprets or reconstructs document text.
-          // Fine pencil, security paper texture and light stamps may fade:
-          // the staff must compare the untouched Original.
-          const depth=Math.max(0,local-lum-profile.inkThreshold);
-          const normalized=255-depth*profile.inkGain;
-          result[i]=result[i+1]=result[i+2]=normalized;
+          // Natural document processing, not document reconstruction.
+          // Earlier V3 forced every paper pixel toward pure white (255)
+          // and discarded blue/red ink by converting everything to gray.
+          // Instead: estimate local paper illumination, apply only a
+          // bounded lift, preserve real paper texture and ink hue, and
+          // gently separate handwriting from its local background.
+          // Exposed highlights remain highlights; no missing data is invented.
+          const desiredLift=Math.max(0,(profile.paperTarget-local)*profile.paperLift);
+          const paperLift=Math.min(profile.maxPaperLift,desiredLift);
+          const inkAdjusted=local+(lum-local)*profile.inkContrast;
+          // Less lift for dark ink than for bright paper helps keep
+          // light/fine pen strokes from fading under shadow correction.
+          const corrected=inkAdjusted+paperLift*(.27+.73*lum/255);
+          const delta=corrected-lum;
+          result[i]=red+delta;
+          result[i+1]=green+delta;
+          result[i+2]=blue+delta;
         }else{
           let shadow=(reference-local)*profile.shadow;
           if(shadow<0)shadow=0;else if(shadow>maxLift)shadow=maxLift;

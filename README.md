@@ -29,12 +29,32 @@ AI image editing, and automatic processing after importing photos was unwanted.
   instruction to automatically enhance a newly imported image.
 - **Optional enhanced download**: save a viewing copy manually to the device;
   there is no additional Supabase image or attachment.
-- **Document Clean**: estimates local paper brightness and normalizes the
-  background toward white, producing a more dramatic scanned-paper look than
-  brightness alone. It is **not AI**, does not read/write amounts, and cannot
-  recover missing photographic detail. Faint pencil strokes, pale ink, stamps,
-  or security-paper patterns can be lost in this viewing mode. Staff should
-  always compare against Original when confirming an invoice.
+- **Document Clean — natural tone refinement**: previously forced paper
+  to pure white and converted colored writing into grayscale. The revised
+  mode applies **bounded local shadow correction** and moderate handwriting
+  contrast, while retaining the captured paper's warm color, blue/red pen and
+  stamp hues, and more of the fine background texture. Natural / Clear /
+  Strong remain selectable; even Strong is capped to avoid bleaching paper.
+  It is **not AI** and cannot restore missing photographic detail. Very pale
+  marks or security patterns can still be affected. Always compare Original
+  when confirming invoice numbers, amounts, and signatures.
+
+### Natural-paper refinement (after live invoice preview feedback)
+
+An actual handwritten-invoice test showed that the old Document Clean Strong
+result was *too white* and made some pen strokes look faint. This update tunes
+only the local `scan` pixel algorithm; it does **not** change the other Color
+and B&W modes, the Original-first/default-collapsed interaction, or storage.
+
+- Target a natural warm paper tone instead of setting every pixel to `255`.
+- Keep the red/blue ink color-channel differences instead of forcing gray.
+- Brighten dark paper gradually while maintaining real ink-to-paper edges.
+- Use a conservative, capped lift at all three strength settings.
+- Preserve the exact original file as the official audit evidence.
+
+Tests use synthetic warm paper, shadow gradients, colored handwriting, a faint
+pencil stroke, and grayscale pages. Real-world results depend on camera
+sharpness and lighting; inspect Original before trusting any processed view.
 
 ### Accounting and technical protections
 
